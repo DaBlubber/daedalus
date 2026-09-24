@@ -1,0 +1,2804 @@
+<title>Daedalus Netzbestand</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Antonio:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500&family=JetBrains+Mono:wght@400;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
+
+<style>
+:root{
+  --ground:#05060a;
+  --panel:#101219;
+  --panel-2:#171a24;
+  --line:#242838;
+  --amber:#ff9f45;
+  --orange:#ff7043;
+  --mauve:#c9a0dc;
+  --lilac:#9fb4ff;
+  --sky:#66d9e8;
+  --rose:#e06c8b;
+  --text:#e9e7f2;
+  --muted:#7f849e;
+  --dim:#4d5268;
+  --ok:#7fd88f;
+  --warn:#ffc65c;
+  --crit:#ff6b6b;
+  --disp:'Antonio','Oswald','Arial Narrow',sans-serif;
+  --body:'IBM Plex Sans',system-ui,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{
+  margin:0;background:var(--ground);color:var(--text);
+  font-family:var(--body);
+  height:100dvh;overflow:hidden;
+}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+/* ---------- Gerüst ---------- */
+.shell{display:grid;grid-template-columns:184px 1fr;height:100dvh}
+
+.rail{
+  background:var(--panel);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;gap:6px;
+  padding:14px 10px;min-height:0;
+}
+/* Die Suche steht dauerhaft in der Leiste — sie ist kein Sonderfall,
+   sondern der zweite Weg auf die Leinwand neben dem Hineingehen. */
+.rsearch{position:relative;display:flex;flex-direction:column;min-height:0}
+.rsearch .rail-head{padding:6px 10px 4px}
+.brand{
+  font-family:var(--disp);font-weight:700;letter-spacing:.14em;
+  font-size:26px;line-height:1;color:var(--amber);
+  padding:2px 0 0 10px;
+}
+.brand small{
+  display:block;font-family:var(--body);font-weight:400;font-size:10px;
+  letter-spacing:.18em;color:var(--dim);margin-top:5px;text-transform:uppercase;
+}
+.rail-cap{height:16px;background:var(--mauve);border-radius:0 0 0 16px;margin:10px 0 2px}
+.rail-head{
+  font-family:var(--disp);font-size:11px;letter-spacing:.2em;
+  color:var(--dim);text-transform:uppercase;padding:12px 10px 4px;
+}
+.lens{
+  display:flex;align-items:center;gap:9px;
+  padding:9px 12px;border-radius:14px 3px 3px 14px;
+  background:var(--panel-2);color:var(--muted);
+  font-family:var(--disp);font-size:16px;letter-spacing:.08em;
+  text-transform:uppercase;text-align:left;width:100%;
+  transition:background .18s,color .18s;
+}
+.lens:hover{background:#1f2331;color:var(--text)}
+.lens[aria-pressed="true"]{background:var(--amber);color:#14100a;font-weight:600}
+.lens .dot{width:8px;height:8px;border-radius:50%;background:currentColor;opacity:.6;flex:none}
+/* Schnellzugriff: jeder Switch ein Klick, egal in welcher Linse man steht.
+   Rolle als Farbe links, damit man den Kern nicht erst lesen muss. */
+.swquick{display:flex;flex-direction:column;gap:4px}
+.swq{
+  display:grid;grid-template-columns:4px 1fr auto;align-items:center;gap:9px;
+  padding:6px 10px 6px 0;border-radius:3px 12px 12px 3px;overflow:hidden;
+  background:var(--panel-2);color:var(--muted);text-align:left;width:100%;
+  transition:background .18s,color .18s;
+}
+.swq:hover{background:#1f2331;color:var(--text)}
+.swq[aria-current="true"]{background:#2a2418;color:var(--text)}
+.swq .rb{align-self:stretch;background:var(--lilac);opacity:.55}
+.swq[data-rolle="KERN"] .rb{background:var(--amber);opacity:1}
+.swq[data-rolle="VERTEILER"] .rb{background:var(--mauve);opacity:1}
+.swq .nm{font-family:var(--disp);font-size:15px;letter-spacing:.08em;text-transform:uppercase}
+.swq .nm small{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.02em;
+  text-transform:none;color:var(--dim);margin-top:1px}
+.swq .rl{font-family:var(--mono);font-size:9px;letter-spacing:.06em;color:var(--dim)}
+.swq[aria-current="true"] .rl{color:var(--amber)}
+.rail-foot{margin-top:auto;display:flex;flex-direction:column;gap:6px}
+.note{
+  font-size:10.5px;line-height:1.5;color:var(--dim);
+  padding:10px;border:1px solid var(--line);border-radius:4px 14px 4px 14px;
+}
+.note b{color:var(--warn);font-weight:500}
+
+/* ---------- Bühne ---------- */
+.stage{position:relative;min-width:0;min-height:0;display:flex;flex-direction:column}
+
+.topbar{
+  display:grid;grid-template-columns:1fr auto;gap:7px 14px;align-items:center;
+  padding:10px 18px 9px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#0c0e15,#05060a);
+}
+.here{grid-column:1;grid-row:1;display:flex;align-items:baseline;gap:11px;flex-wrap:wrap;min-width:0}
+.here-kind{
+  font-family:var(--disp);font-size:10px;letter-spacing:.22em;text-transform:uppercase;
+  color:#14100a;background:var(--amber);padding:3px 9px;border-radius:9px;flex:none;
+}
+.here-name{
+  font-family:var(--disp);font-weight:700;font-size:27px;line-height:1;
+  letter-spacing:.06em;color:var(--amber);
+}
+.here-sub{font-family:var(--mono);font-size:11px;color:var(--muted)}
+#alleN{
+  font-family:var(--disp);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  padding:3px 10px;border-radius:9px;background:#1b2030;color:var(--lilac);
+  border:1px solid #2a3145;
+}
+#alleN:hover{border-color:var(--lilac);color:var(--text)}
+.tools{grid-column:2;grid-row:1;display:flex;gap:7px}
+.chain{grid-column:1/-1;grid-row:2}
+.chain{
+  display:flex;align-items:center;gap:5px;flex-wrap:wrap;
+  font-family:var(--mono);font-size:10.5px;min-height:18px;
+}
+.chain button{
+  color:#7f849e;padding:1px 6px;border-radius:3px;
+  border:1px solid transparent;transition:.15s;
+}
+.chain button:hover{border-color:var(--lilac);background:#161a28;color:var(--lilac)}
+.chain button[aria-current="true"]{color:var(--amber);background:#1d1710}
+.chain .sep{color:#2f3345}
+.chain .depth{
+  font-family:var(--disp);letter-spacing:.16em;text-transform:uppercase;
+  font-size:9.5px;color:var(--dim);margin-right:4px;
+}
+.tools{margin-left:auto;display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.tool{
+  font-family:var(--disp);font-size:13px;letter-spacing:.1em;text-transform:uppercase;
+  padding:6px 14px;border-radius:12px;background:var(--panel-2);color:var(--muted);
+  transition:.15s;white-space:nowrap;
+}
+.tool:hover{background:#232838;color:var(--text)}
+.tool[aria-pressed="true"]{background:var(--mauve);color:#140f18}
+.tool b{font-weight:700;color:var(--amber);margin-left:2px}
+.tool[aria-pressed="true"] b{color:#140f18}
+
+#cy{flex:1;min-height:0;background:
+  linear-gradient(rgba(159,180,255,.032) 1px,transparent 1px) 0 0/46px 46px,
+  linear-gradient(90deg,rgba(159,180,255,.032) 1px,transparent 1px) 0 0/46px 46px,
+  radial-gradient(1200px 680px at 50% 32%,#0d1120 0%,#05060a 74%);}
+
+/* Scheinwerfer: dunkelt alles ab, was nicht dort ist, wo man steht */
+#spot{position:absolute;inset:0;z-index:2;pointer-events:none;
+  transition:opacity .45s ease}
+#spot.frei{opacity:0}
+
+/* Kleines Fenster beim Darüberfahren — alles, was nicht in die Karte passt */
+#tip{
+  position:absolute;z-index:8;pointer-events:none;
+  min-width:196px;max-width:280px;
+  background:rgba(13,16,24,.97);border:1px solid #2b3145;
+  border-radius:10px 3px 10px 3px;
+  box-shadow:0 10px 30px rgba(0,0,0,.55);
+  padding:9px 11px 10px;
+}
+#tip .t-n{
+  font-family:var(--disp);font-size:16px;letter-spacing:.05em;color:var(--amber);
+  line-height:1.15;
+}
+#tip .t-k{
+  font-family:var(--disp);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--dim);margin-bottom:6px;
+}
+#tip dl{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:7px 0 0}
+#tip dt{
+  font-family:var(--disp);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--dim);white-space:nowrap;
+}
+#tip dd{margin:0;font-family:var(--mono);font-size:10.5px;color:#d7dcf0;word-break:break-word}
+#tip dd.w{font-family:var(--body);font-size:11px}
+@media (max-width:760px){ #tip{display:none} }
+
+/* ---------- Überlagerungen ---------- */
+.ov{
+  position:absolute;z-index:6;background:rgba(14,16,23,.96);
+  border:1px solid var(--line);backdrop-filter:blur(7px);
+}
+.ov-head{
+  display:flex;align-items:center;gap:10px;padding:10px 14px;
+  border-bottom:1px solid var(--line);
+  font-family:var(--disp);letter-spacing:.14em;text-transform:uppercase;
+  font-size:13px;color:var(--amber);
+}
+.ov-head .x{margin-left:auto;color:var(--muted);font-size:18px;line-height:1;padding:0 4px}
+.ov-head .x:hover{color:var(--crit)}
+
+/* Detailkarte */
+#card{
+  top:64px;right:16px;width:352px;max-width:calc(100vw - 32px);
+  border-radius:16px 4px 16px 4px;max-height:calc(100dvh - 96px);
+  display:flex;flex-direction:column;
+}
+#card .body{padding:12px 14px;overflow-y:auto}
+.kv{display:grid;grid-template-columns:76px 1fr;gap:5px 12px;font-size:12px;align-items:baseline}
+.kv dt{color:var(--dim);font-family:var(--disp);letter-spacing:.1em;text-transform:uppercase;font-size:10.5px}
+.kv dd{margin:0;font-family:var(--mono);font-size:11.5px;color:var(--text);word-break:break-word}
+.kv dd.plain{font-family:var(--body);font-size:12.5px}
+.chainline{
+  margin-top:12px;padding:9px 11px;border-left:2px solid var(--amber);
+  background:#12141d;font-family:var(--mono);font-size:11px;line-height:1.7;color:var(--lilac);
+}
+.chainline b{display:block;font-family:var(--disp);font-size:10px;letter-spacing:.16em;
+  color:var(--dim);text-transform:uppercase;margin-bottom:4px;font-weight:400}
+.acts{display:flex;flex-wrap:wrap;gap:6px;padding:11px 14px;border-top:1px solid var(--line)}
+.act{
+  font-family:var(--disp);font-size:12px;letter-spacing:.09em;text-transform:uppercase;
+  padding:5px 12px;border-radius:11px;background:var(--panel-2);color:var(--muted);
+}
+.act:hover{background:#262b3c;color:var(--text)}
+.act.dis{opacity:.42;cursor:not-allowed}
+.act:disabled{opacity:.42;cursor:not-allowed}
+.card-section{margin-top:12px;padding:9px 11px;background:#12141d;border-left:2px solid var(--lilac)}
+.card-section h3{margin:0 0 6px;font-family:var(--disp);font-size:10px;font-weight:400;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.card-section p{margin:0;font-size:11.5px;line-height:1.45;color:var(--text)}
+.card-section ul{list-style:none;margin:0;padding:0;font-family:var(--mono);font-size:10.5px;line-height:1.7}
+.inline-act{margin-top:7px;padding:3px 9px;border:1px solid #31384e;border-radius:9px;
+  font-family:var(--disp);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--lilac)}
+.inline-act:hover{border-color:var(--lilac);color:var(--text)}
+.action-port{display:flex;align-items:center;gap:5px}
+.action-port input{width:52px;padding:4px 6px;background:#090b11;border:1px solid var(--line);
+  border-radius:8px;color:var(--text);font-family:var(--mono);font-size:11px}
+.quick-port{padding:3px 6px;border-radius:7px;background:#202536;color:var(--muted);font-family:var(--mono);font-size:9.5px}
+.quick-port:hover{color:var(--text);background:#2a3043}
+.quick-port:disabled{opacity:.42;cursor:not-allowed}
+.action-out{margin:0 14px 12px;padding:9px 10px;max-height:180px;overflow:auto;white-space:pre-wrap;
+  background:#090b11;border:1px solid var(--line);border-radius:4px 11px 4px 11px;
+  color:#cfd6f5;font-family:var(--mono);font-size:10.5px;line-height:1.45}
+.action-out .kurz{display:block;margin-bottom:6px;color:var(--amber);font-weight:700}
+.copy-note{color:var(--ok)!important}
+
+/* Suche */
+#q{
+  width:100%;padding:7px 11px;background:#0a0c12;
+  border:1px solid var(--line);border-radius:12px 3px 12px 3px;
+  color:var(--text);font-family:var(--mono);font-size:11.5px;
+}
+#q:focus{outline:none;border-color:var(--amber);background:#0d1018}
+#q::placeholder{color:#3f4459}
+#qhint{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 0}
+#qhint button{
+  font-family:var(--mono);font-size:9.5px;color:var(--muted);
+  padding:3px 7px;border-radius:8px;background:#141824;border:1px solid #20263a;
+}
+#qhint button:hover{color:var(--amber);border-color:#3b3524}
+#hits{list-style:none;margin:6px 0 0;padding:0;max-height:min(38dvh,300px);overflow-y:auto}
+#hits .grp{
+  font-family:var(--disp);font-size:9px;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--dim);padding:7px 8px 3px;
+}
+#hits li{margin:0}
+#hits button{
+  width:100%;text-align:left;padding:5px 8px;border-radius:4px;
+  display:flex;flex-direction:column;gap:1px;
+}
+#hits button:hover,#hits button:focus-visible{background:#1b1f2c}
+#hits .nm{font-family:var(--disp);font-size:13px;letter-spacing:.04em;line-height:1.15}
+#hits .ip{font-family:var(--mono);font-size:9.5px;color:var(--muted)}
+#hits .nm em{font-style:normal;color:var(--amber)}
+.empty{padding:8px 9px;color:var(--dim);font-size:10.5px;line-height:1.45}
+
+/* Gepflegte Angaben — das Einzige, was nicht gemessen, sondern eingetragen wird */
+#pflege{top:64px;right:16px;width:306px;max-width:calc(100vw - 32px);
+  border-radius:16px 4px 16px 4px;display:flex;flex-direction:column}
+.pf-body{padding:11px 14px;display:flex;flex-direction:column;gap:3px}
+.pf-body label{
+  font-family:var(--disp);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--dim);margin-top:6px;
+}
+.pf-body input,.pf-body textarea{
+  width:100%;padding:7px 10px;background:#0a0c12;border:1px solid var(--line);
+  border-radius:10px 3px 10px 3px;color:var(--text);
+  font-family:var(--mono);font-size:11.5px;resize:vertical;
+}
+.pf-body input:focus,.pf-body textarea:focus{outline:none;border-color:var(--amber)}
+.pf-body ::placeholder{color:#3f4459}
+.pf-fuss{padding:0 14px 10px;font-size:10px;color:var(--dim);line-height:1.5}
+#notizKnopf{
+  font-family:var(--disp);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  padding:3px 10px;border-radius:9px;background:#1b2030;color:var(--lilac);
+  border:1px solid #2a3145;
+}
+#notizKnopf:hover{border-color:var(--lilac);color:var(--text)}
+#notizKnopf.hat{background:#2a2416;color:var(--warn);border-color:#4a3f22}
+
+/* Die übrigen Kinder */
+#mehr{top:64px;right:16px;width:326px;max-width:calc(100vw - 32px);
+  border-radius:16px 4px 16px 4px;max-height:calc(100dvh - 96px);
+  display:flex;flex-direction:column}
+#mq{width:100%;padding:8px 13px;background:#0a0c12;border:0;
+  border-bottom:1px solid var(--line);color:var(--text);
+  font-family:var(--mono);font-size:11.5px}
+#mq::placeholder{color:#3f4459}
+#mliste{list-style:none;margin:0;padding:6px;overflow-y:auto}
+#mliste button{width:100%;text-align:left;padding:6px 9px;border-radius:5px;
+  display:flex;gap:9px;align-items:baseline}
+#mliste button:hover{background:#1b1f2c}
+#mliste .nm{font-family:var(--disp);font-size:13.5px;letter-spacing:.04em}
+#mliste .ip{font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:auto}
+
+/* Veränderungen */
+#changes,#findings{bottom:16px;left:16px;width:410px;max-width:calc(100vw - 32px);border-radius:4px 16px 4px 16px}
+#chg,#fund{list-style:none;margin:0;padding:6px;max-height:min(42dvh,320px);overflow-y:auto}
+/* Filter nach Art: ohne ihn ist die Liste eine Mischung aus Portwechseln,
+   Adressen, WLAN und DHCP, in der man nichts wiederfindet. */
+.chgfilter{display:flex;flex-wrap:wrap;gap:5px;padding:8px 10px 2px}
+.chgfilter button{
+  font-family:var(--mono);font-size:10px;letter-spacing:.04em;
+  padding:3px 8px;border-radius:10px;background:var(--panel-2);color:var(--muted);
+  box-shadow:inset 0 0 0 1px var(--line);
+}
+.chgfilter button b{font-weight:600;color:var(--text);margin-left:4px}
+.chgfilter button[aria-pressed="true"]{background:var(--amber);color:#14100a;box-shadow:none}
+.chgfilter button[aria-pressed="true"] b{color:#14100a}
+.chgkat{font-family:var(--mono);font-size:9px;letter-spacing:.05em;color:var(--dim);
+  text-transform:uppercase;margin-right:6px}
+#chg button,#fund button{width:100%;text-align:left;padding:8px 10px;border-radius:5px;display:flex;gap:10px;align-items:center}
+#chg button:hover,#fund button:hover{background:#1b1f2c}
+#fund li{display:flex;align-items:center;gap:4px}
+#fund li>button.fund-ok{width:auto;flex:none;padding:6px 8px;font-size:10px;color:var(--dim);font-family:var(--mono)}
+#fund li>button.fund-ok:hover{color:var(--text)}
+#fund li.erwartet .chg-t{color:var(--dim)}
+.tag{
+  font-family:var(--disp);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+  padding:2px 7px;border-radius:9px;flex:none;
+}
+.tag.neu{background:#14301c;color:var(--ok);box-shadow:inset 0 0 0 1px #295433}
+.tag.weg{background:#331519;color:var(--crit);box-shadow:inset 0 0 0 1px #5c2830}
+.tag.um{background:#33280f;color:var(--warn);box-shadow:inset 0 0 0 1px #5e4a1c}
+.chg-t{font-family:var(--disp);font-size:14px;letter-spacing:.04em}
+.chg-s{font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:auto;white-space:nowrap}
+.tag.warn{background:#33280f;color:var(--warn);box-shadow:inset 0 0 0 1px #5e4a1c}
+.tag.info{background:#1a1d29;color:var(--muted);box-shadow:inset 0 0 0 1px #303547}
+.panel-foot{display:flex;justify-content:flex-end;padding:4px 10px 10px}
+
+/* Vergleich bleibt getrennt von der Detailkarte, damit beide Seiten gleichzeitig sichtbar sind. */
+#compare{top:64px;right:16px;width:min(720px,calc(100vw - 32px));max-height:calc(100dvh - 96px);
+  border-radius:16px 4px 16px 4px;display:flex;flex-direction:column}
+.compare-body{padding:8px 12px 12px;overflow:auto}
+.compare-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:11px}
+.compare-table th{padding:7px;text-align:left;color:var(--amber);font-family:var(--disp);font-size:14px;letter-spacing:.05em}
+.compare-table th:first-child{width:116px;color:var(--dim);font-size:9.5px;text-transform:uppercase}
+.compare-table td{padding:6px 7px;border-top:1px solid var(--line);vertical-align:top;font-family:var(--mono);word-break:break-word}
+.compare-table td:first-child{color:var(--dim);font-family:var(--disp);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase}
+.compare-table tr.diff td:not(:first-child){background:#2b2313;color:#ffe0a0}
+.compare-hint{position:absolute;z-index:7;top:68px;left:50%;transform:translateX(-50%);
+  padding:8px 12px;border:1px solid #594821;border-radius:4px 12px;background:#251d10;
+  color:var(--warn);font-size:11px;box-shadow:0 8px 24px #0008}
+.compare-hint button{margin-left:10px;color:var(--text);text-decoration:underline}
+
+/* Fusszeile der Buehne */
+.stagefoot{
+  position:absolute;left:16px;bottom:16px;z-index:3;
+  font-family:var(--mono);font-size:10px;color:var(--dim);
+  pointer-events:none;letter-spacing:.04em;
+}
+
+/* Die Legende steht UEBER der Bedienzeile, nicht daneben: mit Kern/Verteiler/
+   Zugang und LAG ist sie zu lang geworden und lief bei schmaler Buehne in den
+   Hinweistext hinein. */
+.legend{
+  position:absolute;right:16px;bottom:34px;z-index:3;display:flex;gap:8px 14px;
+  flex-wrap:wrap;justify-content:flex-end;max-width:calc(100% - 32px);
+  font-family:var(--mono);font-size:10px;color:var(--dim);pointer-events:none;
+}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;vertical-align:1px}
+.legend i.lag{width:12px;height:7px;border:0;border-radius:0;background:
+  linear-gradient(var(--lilac),var(--lilac)) 0 0/12px 2px no-repeat,
+  linear-gradient(var(--lilac),var(--lilac)) 0 5px/12px 2px no-repeat}
+.kv dd .sub{display:block;margin-top:3px;color:var(--muted);font-family:var(--body);font-size:10.5px;line-height:1.4}
+
+@media (max-width:760px){
+  .shell{grid-template-columns:1fr;grid-template-rows:1fr auto}
+  .stage{order:1}
+  .rail{
+    order:2;flex-direction:row;align-items:center;gap:6px;overflow-x:auto;
+    border-right:0;border-top:1px solid var(--line);padding:9px 12px;
+  }
+  .brand,.rail-head,.rail-cap,.rail-foot{display:none}
+  .lens{width:auto;border-radius:13px;padding:8px 13px;white-space:nowrap;font-size:14px}
+  .rsearch{flex:1 1 140px;min-width:120px}
+  .rsearch .rail-head{display:none}
+  #hits{
+    position:absolute;bottom:calc(100% + 8px);left:0;width:min(78vw,300px);
+    background:rgba(13,16,24,.97);border:1px solid var(--line);
+    border-radius:10px 3px 10px 3px;padding:5px;max-height:44dvh;
+    box-shadow:0 -10px 30px rgba(0,0,0,.5);
+  }
+  #hits:empty{display:none}
+  #card,#changes,#findings,#compare{left:12px;right:12px;width:auto;max-width:none}
+  #card{top:auto;bottom:12px;max-height:56dvh}
+  #changes,#findings{bottom:12px}
+  .legend,.stagefoot{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="shell">
+  <nav class="rail">
+    <div class="brand">DAEDALUS<small>Netzbestand</small></div>
+    <div class="rail-cap"></div>
+
+    <div class="rsearch">
+      <label class="rail-head" for="q">Suche</label>
+      <input id="q" type="search" placeholder="Name · 10.10.11. · vlan:20" autocomplete="off"
+             title="Freitext oder Filter: name: ip: mac: hersteller: typ: netz: vlan: switch: port: ap: — mehrere Begriffe werden UND-verknüpft">
+      <div id="qhint" hidden></div>
+      <ul id="hits"></ul>
+    </div>
+
+    <div class="rail-head">Linse</div>
+    <button class="lens" data-lens="topo"  aria-pressed="true"><span class="dot"></span>Topologie</button>
+    <button class="lens" data-lens="ipnet" aria-pressed="false"><span class="dot"></span>IP-Netz</button>
+    <button class="lens" data-lens="ap"    aria-pressed="false"><span class="dot"></span>Access Point</button>
+    <button class="lens" data-lens="dhcp"  aria-pressed="false"><span class="dot"></span>DHCP</button>
+
+    <div id="swquick-bereich">
+      <div class="rail-head">Switches</div>
+      <div class="swquick" id="swquick" role="list"></div>
+    </div>
+    <div class="rail-foot">
+      <div class="note"><b>Datenstand</b><br><span id="datenstand"></span></div>
+    </div>
+  </nav>
+
+  <main class="stage">
+    <div class="topbar">
+      <div class="here">
+        <div class="here-kind" id="hereKind">Switch</div>
+        <div class="here-name" id="hereName">C3PO</div>
+        <div class="here-sub"  id="hereSub">SG300-28</div>
+        <button id="alleN" hidden></button>
+        <button id="notizKnopf" title="Notiz, Dose und Raum zu diesem Punkt">Notiz</button>
+      </div>
+      <div class="tools">
+        <button class="tool" id="t-link">Link kopieren</button>
+        <button class="tool" id="t-changes" aria-pressed="false">Veränderungen <b id="chgN"></b></button>
+        <button class="tool" id="t-findings" aria-pressed="false">Funde <b id="fundN"></b></button>
+        <button class="tool" id="t-up">Zurück</button>
+      </div>
+      <div class="chain" id="chain" aria-label="Kette"></div>
+    </div>
+
+    <div id="cy"></div>
+    <div id="spot" aria-hidden="true"></div>
+    <div id="tip" role="tooltip" hidden></div>
+
+    <div class="stagefoot">Klick = hineingehen · Darüberfahren = Auskunft · Ziehen und Rad = frei bewegen · Umschalt+Rad = seitwärts</div>
+    <div class="legend">
+      <span><i style="background:var(--ok)"></i>gesehen</span>
+      <span><i style="background:var(--dim)"></i>still</span>
+      <span><i style="background:var(--warn)"></i>abgeleitet</span>
+      <span><i style="background:#0b0d14;box-shadow:inset 0 0 0 1px #39405c"></i>Port nicht belegt</span>
+      <span><i style="background:var(--amber)"></i>Kern</span>
+      <span><i style="background:var(--mauve)"></i>Verteiler</span>
+      <span><i style="background:var(--lilac);opacity:.55"></i>Zugang</span>
+      <span><i class="lag"></i>LAG</span>
+    </div>
+
+    <section class="ov" id="pflege" hidden>
+      <div class="ov-head" id="pflege-kopf">Notiz<button class="x" id="x-pflege" aria-label="Schließen">×</button></div>
+      <div class="pf-body">
+        <div id="pf-name-zeile" hidden>
+          <label for="pf-name">Name</label>
+          <input id="pf-name" type="text" maxlength="120" placeholder="sprechender Gerätename" autocomplete="off">
+        </div>
+        <label for="pf-dose">Wanddose</label>
+        <input id="pf-dose" type="text" maxlength="120" placeholder="B2-14" autocomplete="off">
+        <label for="pf-raum">Raum</label>
+        <input id="pf-raum" type="text" maxlength="120" placeholder="Büro" autocomplete="off">
+        <label for="pf-notiz">Notiz</label>
+        <textarea id="pf-notiz" rows="3" maxlength="2000" placeholder="was man wissen muss"></textarea>
+        <label for="pf-erwartet">Fund erwartet, weil …</label>
+        <input id="pf-erwartet" type="text" maxlength="300" placeholder="leer = Funde normal melden" autocomplete="off">
+      </div>
+      <div class="acts">
+        <button class="act" id="pf-speichern">Speichern</button>
+        <button class="act" id="pf-leeren">Leeren</button>
+      </div>
+      <div class="pf-fuss" id="pf-fuss"></div>
+    </section>
+
+    <section class="ov" id="mehr" hidden>
+      <div class="ov-head" id="mehr-kopf">Liste<button class="x" id="x-mehr" aria-label="Liste schließen">×</button></div>
+      <input id="mq" type="search" placeholder="in dieser Liste filtern" autocomplete="off">
+      <ul id="mliste"></ul>
+    </section>
+
+    <section class="ov" id="changes" hidden>
+      <div class="ov-head">Veränderungen · 7 Tage<button class="x" id="x-changes" aria-label="Liste schließen">×</button></div>
+      <div class="chgfilter" id="chgfilter" role="group" aria-label="Nach Art filtern"></div>
+      <ul id="chg"></ul>
+    </section>
+
+    <section class="ov" id="findings" hidden>
+      <div class="ov-head">Funde<button class="x" id="x-findings" aria-label="Liste schließen">×</button></div>
+      <div class="chgfilter" id="fundfilter" role="group" aria-label="Funde nach Art filtern"></div>
+      <ul id="fund"></ul>
+      <div class="panel-foot"><button class="act" id="fund-export">Export</button></div>
+    </section>
+
+    <div class="compare-hint" id="compare-hint" hidden></div>
+    <section class="ov" id="compare" hidden>
+      <div class="ov-head">Geräte vergleichen<button class="x" id="x-compare" aria-label="Vergleich schließen">×</button></div>
+      <div class="compare-body" id="compare-body"></div>
+    </section>
+
+    <section class="ov" id="card" hidden>
+      <div class="ov-head" id="card-title">Gerät<button class="x" id="x-card" aria-label="Karte schließen">×</button></div>
+      <div class="body"><dl class="kv" id="card-kv"></dl><div class="chainline" id="card-chain"></div><div id="card-extra"></div></div>
+      <div class="acts" id="card-acts">
+        <button class="act" id="act-ping">Ping</button>
+        <button class="act" id="act-trace">Traceroute</button>
+        <span class="action-port"><input id="act-portnr" type="number" min="1" max="65535" value="22" aria-label="Portnummer"><button class="act" id="act-port">Port prüfen</button></span>
+        <button class="quick-port" data-port="22">22</button><button class="quick-port" data-port="80">80</button><button class="quick-port" data-port="443">443</button>
+        <button class="act" id="act-wol">Wake-on-LAN</button>
+        <button class="act" id="act-scan" hidden>Portscan</button>
+        <button class="act" id="compare-start">Vergleichen</button>
+        <button class="act" id="card-export">Export</button>
+        <button class="act" id="nameKnopf">Name vergeben</button>
+      </div>
+      <div class="action-out" id="action-out" hidden></div>
+    </section>
+  </main>
+</div>
+
+<script id="stand" type="application/json">{}</script>
+<script>
+/* ============================================================
+   Der Server bettet den fachlichen Stand direkt vor diesem Skript ein.
+   ============================================================ */
+
+const STAND = JSON.parse(document.getElementById('stand').textContent);
+const NETS = STAND.NETS || [];
+const NETBY = id => NETS.find(x=>x.id===id) || {id,label:id,cidr:'',vlan:null,frei:null};
+const VLAN = netz => netz.vlan===null || netz.vlan===undefined ? '—' : String(netz.vlan);
+const VLANS = geraete => [...new Set(geraete.map(d=>NETBY(d.net).vlan)
+  .filter(v=>v!==null && v!==undefined))].sort((a,b)=>a-b);
+const APS = STAND.APS || [];
+const SWITCHES = STAND.SWITCHES || [];
+const PORTS = STAND.PORTS || {};
+const DEV = STAND.DEV || [];
+const DHCP = STAND.DHCP || [];
+const devices = DEV;
+const byId = new Map(devices.map(d=>[d.id,d]));
+const byMac = new Map(devices.map(d=>[String(d.mac||d.id).toLowerCase(),d]));
+const APPORTS = new Set([...APS.map(a=>a.port),...devices.map(d=>d.ap_kabel)].filter(Boolean));
+const CHANGES = STAND.CHANGES || [];
+const FUNDE = STAND.FUNDE || [];
+/* Eine flache Kopie reicht: Ein Eintrag wird erst nach erfolgreichem PUT als
+   Ganzes ersetzt. So bleibt die eingebettete Ausgangslage unveraendert. */
+const PFLEGE = {...(STAND.PFLEGE || {})};
+
+/* Beschriftungen sind fuer Menschen: "Port 12" statt "gi12". Der Bezeichner am
+   Geraet geht nicht verloren - er steht in der Kopfzeile und auf der Detailkarte,
+   denn zum Nachsehen am Switch braucht man genau ihn. */
+function portLabel(n){
+  const basis=(n.fiber?'Fiber ':'Port ')+n.num;
+  return n.bundle>1 ? 'LAG · '+basis : basis;
+}
+function nodeLabelFull(id){
+  const n=N.get(id);
+  return n.kind==='port' ? N.get(n.sw).label+' '+portLabel(n) : n.label;
+}
+
+/* Ein Knoten kann von mehreren Aenderungen betroffen sein. Gezeigt wird die
+   gewichtigste: verschwunden schlaegt geaendert, geaendert schlaegt neu. */
+const MARKRANG={weg:3,um:2,neu:1};
+const MARKWORT={neu:'neu',um:'geändert',weg:'verschwunden'};
+const MARKFARBE={neu:'#7fd88f',um:'#ffc65c',weg:'#ff6b6b',warn:'#ffc65c'};
+function hatPflege(id){
+  const p=PFLEGE[id];
+  return !!(p && (p.dose || p.raum || p.notiz));
+}
+function pflegeZeile(id){
+  const p=PFLEGE[id]; if(!p) return '';
+  return [p.dose && ('Dose '+p.dose), p.raum].filter(Boolean).join(' \u00b7 ');
+}
+
+const CHANGEMAP=new Map();
+CHANGES.forEach(([typ,id,wann,was,betrifft])=>{
+  [id,...(betrifft||[])].forEach(x=>{
+    const alt=CHANGEMAP.get(x);
+    if(alt && MARKRANG[alt.typ]>=MARKRANG[typ]) return;
+    CHANGEMAP.set(x,{typ,wann,was,quelle:id});
+  });
+});
+
+/* Funde bekommen eine eigene Ecke; die Aenderungsmarke oben rechts bleibt dadurch eindeutig. */
+/* Als erwartet bestaetigte Funde bleiben in der Liste, markieren aber nichts mehr. */
+const FUNDMAP=new Map();
+function fundmapBauen(){
+  FUNDMAP.clear();
+  FUNDE.filter(f=>!f.erwartet).forEach(f=>(f.betrifft||[]).forEach(id=>FUNDMAP.set(id,true)));
+}
+fundmapBauen();
+
+const SPEED = {2000:'2 Gbit/s (Bündel)',1000:'1 Gbit/s',100:'100 Mbit/s'};
+
+function ipTeile(ip){
+  const m=String(ip||'').match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)/);
+  return m ? m.slice(1).map(Number) : null;
+}
+function ipVergleich(a,b){
+  const aa=ipTeile(a),bb=ipTeile(b);
+  if(aa&&bb) for(let i=0;i<4;i++) if(aa[i]!==bb[i]) return aa[i]-bb[i];
+  if(aa) return -1;
+  if(bb) return 1;
+  return String(a||'').localeCompare(String(b||''),'de');
+}
+function geraeteIpVergleich(a,b,adresse){
+  const da=byId.get(a),db=byId.get(b);
+  const ia=adresse?adresse(a):(da&&da.ip), ib=adresse?adresse(b):(db&&db.ip);
+  return ipVergleich(ia,ib) || String((da&&da.label)||a).localeCompare(String((db&&db.label)||b),'de');
+}
+function nameVorhanden(d){ return !!(d&&d.namensquelle); }
+function namenText(d){
+  return [d&&d.label,...Object.values((d&&d.namen)||{})].filter(Boolean).join(' ');
+}
+function weitereNamen(d){
+  const haupt=String(d.label||'').toLowerCase(), mac=String(d.mac||'').toLowerCase();
+  return Object.entries(d.namen||{}).filter(([quelle,name])=>{
+    const n=String(name||'').trim().toLowerCase();
+    return n && n!==haupt && n!==mac && quelle!==d.namensquelle;
+  }).map(([quelle,name])=>quelle+': '+name);
+}
+function nameMitQuelle(d){
+  return nameVorhanden(d) ? d.label+' ('+d.namensquelle+')'
+    : 'unbekannt — per „Name vergeben“ eintragen';
+}
+
+function portZielName(n){
+  const ziel=String(n.ziel||'');
+  if(ziel.startsWith('sw:')) return (N.get(ziel.slice(3))||{}).label||ziel.slice(3).toUpperCase();
+  if(ziel.startsWith('ap:')) return (N.get(ziel)||{}).label||ziel.slice(3).toUpperCase();
+  return '';
+}
+function tempoKurz(speed){
+  if(speed>=1000) return (speed/1000).toLocaleString('de-DE',{maximumFractionDigits:1})+'G';
+  return speed+'M';
+}
+function tempoLang(speed){
+  const n=Number(speed);
+  if(!Number.isFinite(n)) return speed ? String(speed) : 'nicht gemessen';
+  return n>=1000 ? (n/1000).toLocaleString('de-DE',{maximumFractionDigits:1})+' Gbit/s' : n+' Mbit/s';
+}
+function vlanText(vlans){
+  const s=String(vlans||'').trim(); if(!s) return 'nicht gemessen';
+  const u=(s.match(/(?:^|\s)u:([^\s]+)/)||[])[1];
+  const t=(s.match(/(?:^|\s)t:([^\s]+)/)||[])[1];
+  if(u&&!t) return 'Access VLAN '+u;
+  return [u&&('untagged '+u),t&&('tagged '+t.split(',').join(', '))].filter(Boolean).join(' · ')||s;
+}
+function messwert(v,einheit){
+  return v===null||v===undefined||v==='' ? 'nicht gemessen' : String(v)+(einheit||'');
+}
+
+/* --- Knoten und Kindbeziehungen je Linse aufbauen --- */
+const N = new Map();            // id -> {id,kind,label,sub,...}
+const kids = {topo:{},ipnet:{},ap:{},dhcp:{}};
+const par  = {topo:{},ipnet:{},ap:{},dhcp:{}};
+const edgeMeta = new Map();     // "a>b" -> {speed,bundle,inferred}
+
+function node(o){N.set(o.id,o);return o.id}
+function link(lens,a,b,meta){
+  (kids[lens][a] ||= []).push(b);
+  par[lens][b]=a;
+  if(meta) edgeMeta.set(lens+':'+a+'>'+b,meta);
+}
+
+node({id:'sophos',kind:'fw',label:'YODA',sub:'Sophos XGS · 172.16.1.1'});
+node({id:'wlan',kind:'root',label:'WLAN',
+      sub:APS.length+' Access Points · '+devices.filter(d=>d.ap).length+' Clients'});
+
+const DHCP_POOL=DHCP.flatMap(x=>x.pools||[]).reduce((s,p)=>({
+  groesse:s.groesse+(Number(p.groesse)||0),belegt:s.belegt+(Number(p.belegt)||0),
+}),{groesse:0,belegt:0});
+const DHCP_FUNDE=DHCP.reduce((s,x)=>s+(x.funde||[]).length,0);
+node({id:'dhcp',kind:'dhcproot',label:'KEA DHCP',
+      sub:'exekutor-3 primär · exekutor-1 standby',funde:DHCP_FUNDE});
+
+function switchRolle(s){
+  if(s.id===STAND.wurzel) return 'KERN';
+  return (PORTS[s.id]||[]).some(p=>/^sw:|^ap:/.test(String(p.to||''))) ? 'VERTEILER' : 'ZUGANG';
+}
+function switchSpeist(s){
+  const ps=PORTS[s.id]||[];
+  const switches=ps.filter(p=>String(p.to||'').startsWith('sw:')).map(p=>{
+    const id=String(p.to).slice(3),x=SWITCHES.find(v=>v.id===id); return x?x.label:id.toUpperCase();
+  });
+  const aps=ps.filter(p=>String(p.to||'').startsWith('ap:'));
+  return {switches,aps:aps.length};
+}
+SWITCHES.forEach(s=>{
+  const rolle=switchRolle(s), speist=switchSpeist(s);
+  const versorgung=[speist.switches.length&&('speist '+speist.switches.join(', ')),
+                    speist.aps&&speist.aps+' Access Points'].filter(Boolean).join(' · ');
+  node({id:s.id,kind:'switch',label:s.label,sub:(rolle==='KERN'?'Kern-Switch':
+        rolle==='VERTEILER'?'Verteiler-Switch':'Zugangs-Switch')+(versorgung?' · '+versorgung:''),
+        modell:s.modell,ip:s.ip,ports:s.ports,rolle,speist});
+});
+NETS.forEach(n=>node({id:n.id,kind:'net',label:n.label,sub:n.cidr,
+                      kurz:n.label,frei:n.frei}));
+APS.forEach(a=>node({id:a.id,kind:'ap',label:a.label,sub:a.ip}));
+devices.forEach(d=>node({id:d.id,kind:'device',label:d.label,sub:d.typ,state:d.state}));
+
+/* Topologie */
+link('topo','sophos',STAND.wurzel,{speed:1000});
+SWITCHES.forEach(s=>{
+  /* Ziele stehen vor Endgeraeten, weil die Verteilung fuer das Verstaendnis
+     der Topologie wichtiger ist als die physische Reihenfolge der Blende. */
+  const rang=p=>String(p.to||'').startsWith('sw:')?0:String(p.to||'').startsWith('ap:')?1:2;
+  const sortiert=(PORTS[s.id]||[]).slice().sort((x,y)=>rang(x)-rang(y)
+    || (x.fiber?1:0)-(y.fiber?1:0) || parseInt(x.n,10)-parseInt(y.n,10));
+  sortiert.forEach(p=>{
+    const pid = s.id+':'+p.p;
+    const aktivUnbekannt = p.to===null && p.link==='up';
+    const belegt = p.to!==null || aktivUnbekannt;
+    node({id:pid,kind:'port',label:(p.fiber?'Fiber ':'Port ')+p.n,iface:p.p,num:p.n,
+           fiber:!!p.fiber,sub:s.label,belegt,
+           uplink:p.to==='up'||String(p.to).startsWith('sw:'),
+           aktivUnbekannt,bundle:p.bundle||1,speed:p.speed,sw:s.id,ziel:p.to,
+           quer:p.quer||'',raw:p});
+    /* Auch die Rueckseite eines Uplinks bleibt sichtbar: nur so sind wirklich
+       alle physischen Ports und ein ausgefallener Uplink am eigenen Switch auffindbar. */
+    link('topo',s.id,pid);
+  });
+});
+SWITCHES.forEach(s=>(PORTS[s.id]||[]).forEach(p=>{
+  const ziel=String(p.to||'');
+  if(ziel.startsWith('sw:'))
+    link('topo',s.id+':'+p.p,ziel.slice(3),{speed:p.speed,bundle:p.bundle});
+  else if(ziel.startsWith('ap:'))
+    link('topo',s.id+':'+p.p,ziel,{speed:p.speed});
+}));
+devices.forEach(d=>{
+  if(d.port) { link('topo',d.port,d.id,{speed:1000}); return; }
+  /* Ein WLAN-Client haengt in der Topologie an seinem Access Point — sofern
+     der AP selbst per LLDP an einem Switchport gemessen ist. Gestrichelt, weil
+     Funk kein Kabel ist; so endet die Kette nicht am AP. */
+  if(d.ap && par.topo[d.ap]) link('topo',d.ap,d.id,{speed:1000,inferred:true});
+});
+
+/* IP-Netz: Zahlen werden als Zahlen verglichen, damit .2 vor .10 steht. */
+NETS.filter(n=>n.vlan!==null || devices.some(d=>d.net===n.id))
+    .sort((a,b)=>ipVergleich(a.cidr,b.cidr))
+    .forEach(n=>link('ipnet','sophos',n.id,{speed:1000}));
+NETS.forEach(n=>devices.filter(d=>d.net===n.id).sort((a,b)=>ipVergleich(a.ip,b.ip)
+  || String(a.label||'').localeCompare(String(b.label||''),'de'))
+  .forEach(d=>link('ipnet',n.id,d.id,{speed:1000,inferred:!d.port})));
+
+/* Access Point */
+APS.forEach(a=>link('ap','wlan',a.id,{speed:1000}));
+devices.forEach(d=>{ if(d.ap) link('ap',d.ap,d.id,{speed:d.state==='side'?100:1000,inferred:d.state==='side'}); });
+
+/* DHCP hat pro Geraet genau einen Elternteil. Der erste Netztreffer gewinnt,
+   weil Cytoscape sonst denselben Knoten an zwei Stellen zugleich zeigen muesste. */
+const DHCPORT=new Map(), DHCPWARN=new Set();
+const dhcpGesehen=new Set();
+const GRUPPEN={reserviert:'RESERVIERT',pool:'POOL',statisch:'OHNE LEASE'};
+const dhcpNetze=DHCP.slice().sort((a,b)=>ipVergleich(a.cidr,b.cidr));
+dhcpNetze.forEach(x=>{
+  const pools=x.pools||[], groesse=pools.reduce((s,p)=>s+(Number(p.groesse)||0),0);
+  const belegt=pools.reduce((s,p)=>s+(Number(p.belegt)||0),0), funde=x.funde||[];
+  node({id:x.id,kind:'dhcpnet',label:x.label||x.cidr,sub:x.cidr,dhcp:x,
+        groesse,belegt,funde:funde.length});
+  link('dhcp','dhcp',x.id,{speed:1000});
+  if(funde.length) DHCPWARN.add(x.id);
+  ['reserviert','pool','statisch'].forEach(art=>{
+    const quelle=art==='statisch'?(x.statisch||[]):(x.eintraege||[]).filter(e=>e.art===art);
+    const neu=quelle.filter(e=>!dhcpGesehen.has(String(e.mac||'').toLowerCase()));
+    if(!neu.length) return;
+    const gid='dhcpgruppe:'+x.id+':'+art;
+    node({id:gid,kind:'dhcpgroup',label:GRUPPEN[art],sub:neu.length+' Einträge',art});
+    link('dhcp',x.id,gid,{speed:1000});
+    neu.slice().sort((a,b)=>ipVergleich(a.lease||a.reservierung||a.ip,b.lease||b.reservierung||b.ip)
+      || String(a.label||a.mac).localeCompare(String(b.label||b.mac),'de')).forEach(e=>{
+      const mac=String(e.mac||'').toLowerCase(); if(!mac||dhcpGesehen.has(mac)) return;
+      dhcpGesehen.add(mac);
+      const dev=byMac.get(mac), bekannt=e.bekannt!==false&&!!dev, id=bekannt?dev.id:'dhcpres:'+mac;
+      const adresse=e.lease||e.reservierung||e.ip||'';
+      const info={...e,netz:x.id,gruppe:art,adresse,
+        funde:funde.filter(f=>String(f.mac||'').toLowerCase()===mac)};
+      if(!bekannt) node({id,kind:'dhcpres',label:e.label||mac,sub:mac,state:'quiet',dhcp:info});
+      DHCPORT.set(id,info);
+      const abweichend=e.reservierung&&(
+        (e.lease&&e.reservierung!==e.lease)
+        || ((e.gesehen||[]).length&&!(e.gesehen||[]).includes(e.reservierung)));
+      if(info.funde.length || abweichend) DHCPWARN.add(id);
+      link('dhcp',gid,id,{speed:1000,inferred:!bekannt});
+    });
+  });
+});
+if(DHCP_FUNDE) DHCPWARN.add('dhcp');
+
+const ROOT = {topo:'sophos',ipnet:'sophos',ap:'wlan',dhcp:'dhcp'};
+
+/* Was an einem Port anliegt, wird aus dem angeschlossenen Gerät abgeleitet und
+   nicht von Hand gepflegt — so können Port und Netz sich nie widersprechen. */
+function devicesUnder(id,depth){
+  const out=[];
+  (function walk(x,d){
+    (kids.topo[x]||[]).forEach(c=>{
+      if(byId.has(c)) out.push(byId.get(c));
+      else if(d>0) walk(c,d-1);
+    });
+  })(id, depth===undefined?2:depth);
+  return out;
+}
+function portMode(pid){
+  const n=N.get(pid);
+  if(n.aktivUnbekannt) return 'aktiv, kein Gerät bekannt';
+  if(!n.belegt)  return 'nicht belegt';
+  if(n.uplink)   return 'Trunk · alle VLAN';
+  /* Auch die Geräte hinter einem Sammelport zählen mit — sonst bliebe
+     ausgerechnet der interessanteste Port ohne Angabe. */
+  const vs = VLANS(devicesUnder(pid));
+  if(!vs.length) return 'Access';
+  return 'Access · VLAN '+vs.join(', ');
+}
+
+function portGesundheit(n){
+  if(!n||n.kind!=='port') return null;
+  const p=n.raw||{}, versorgung=n.uplink||String(n.ziel||'').startsWith('ap:')||APPORTS.has(n.id);
+  if(versorgung&&p.link==='down') return 'crit';
+  if(p.link==='teilweise') return 'warn';
+  const messungen=[p,...(p.mitglieder||[])];
+  if(messungen.some(x=>(Number(x.fehler_24h)||0)>0||(Number(x.wechsel_24h)||0)>=4)) return 'warn';
+  if(versorgung&&messungen.some(x=>x.duplex==='halb'||(Number(x.speed)>0&&Number(x.speed)<1000))) return 'warn';
+  return null;
+}
+
+/* Unter dem Knoten steht nur noch der Name. Alles Weitere steht IN der Karte. */
+function labelShort(id){
+  const n=N.get(id);
+  return n.kind==='port' ? portLabel(n) : (n.kurz||n.label).split('\n')[0];
+}
+
+/* Genau EINE Zeile in der Karte — die Kennzahl, nach der man sucht.
+   Alles Weitere erscheint beim Darüberfahren im kleinen Fenster. */
+function cardLines(id){
+  const n=N.get(id);
+  switch(n.kind){
+    case 'port': {
+      if(!n.belegt) return ['frei'];
+      if(n.aktivUnbekannt) return ['aktiv · unbekannt'];
+      const ziel=portZielName(n);
+      if(n.bundle>1){
+        const jeLeitung=Number(n.speed)>0?Math.max(1,Math.round(n.speed/n.bundle)):null;
+        return [n.bundle+(jeLeitung?'×'+tempoKurz(jeLeitung):' Leitungen')+(ziel?' → '+ziel:'')];
+      }
+      if(ziel) return ['→ '+ziel];
+      if(n.uplink)  return ['alle VLAN'];
+      const vs=VLANS(devicesUnder(id));
+      return [vs.length?'VLAN '+vs.join(', '):'Access'];
+    }
+    case 'switch': {
+      const s=SWITCHES.find(x=>x.id===id)||{};
+      return [n.ip||'',s.poe_budget_w!==null&&s.poe_budget_w!==undefined
+        ? 'PoE '+messwert(s.poe_w,'')+'/'+s.poe_budget_w+' W':'' ].filter(Boolean);
+    }
+    case 'fw':     return ['172.16.1.1'];
+    case 'ap':     return [APS.find(x=>x.id===id).ip];
+    case 'root':   return [devices.filter(d=>d.ap).length+' Clients'];
+    case 'net':    return [NETBY(id).cidr];
+    case 'dhcproot':return [DHCP_POOL.belegt+'/'+DHCP_POOL.groesse+' belegt',DHCP_FUNDE+' Funde'];
+    case 'dhcpnet':return ['Pool '+n.belegt+'/'+n.groesse];
+    case 'dhcpgroup':return [(kids.dhcp[id]||[]).length+' Geräte'];
+    case 'dhcpres':return [n.dhcp.reservierung||n.dhcp.lease||n.dhcp.ip||'keine Lease'];
+    case 'unknown':return ['4 Geräte'];
+    default: {
+      const d=byId.get(id);
+      if(d&&lens==='dhcp'){
+        const h=DHCPORT.get(id)||{}, adresse=h.lease||h.reservierung||'';
+        return [adresse||'keine Lease'];
+      }
+      return d?[d.ip]:[''];
+    }
+  }
+}
+
+/* Kette in der Topologie — unabhängig von der gerade gewählten Linse */
+function topoChain(id){
+  const out=[];let c=id;let guard=0;
+  while(c && guard++<24){out.unshift(c);c=par.topo[c];}
+  return out;
+}
+function chainText(id){
+  const p=topoChain(id);
+  if(p.length<2){
+    /* Nicht jedes Geraet ohne Kabelweg ist im WLAN: eine VM wie host-59a8 haengt
+       hinter dem Port ihres Wirts, und die MAC-Tabelle nennt nur den Wirt. */
+    const d=byId.get(id);
+    return d&&d.ap ? 'nur über WLAN erreichbar — kein Kabelweg bekannt'
+                   : 'kein Switchport bekannt (MAC in keiner MAC-Tabelle — z. B. VM hinter ihrem Wirt)';
+  }
+  return p.map(x=>{
+    const n=N.get(x);
+    return n.kind==='net' ? n.kurz : nodeLabelFull(x);
+  }).filter((v,i,a)=>v!==a[i-1]).join(' → ');
+}
+
+/* ============================================================
+   Leinwand
+   ============================================================ */
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const DUR = RM?0:380, EASE='ease-in-out-cubic';
+
+/* Knoten sind jetzt Karten: Symbol oben, Rahmendaten darin, Name darunter.
+   Deshalb Breite und Hoehe getrennt statt einer Kantenlaenge. */
+const KIND = {
+  fw:      {w:146,h:122,col:'#ff9f45'},
+  root:    {w:138,h:116,col:'#66d9e8'},
+  switch:  {w:142,h:118,col:'#c9a0dc'},
+  net:     {w:146,h:122,col:'#9fb4ff'},
+  ap:      {w:136,h:114,col:'#66d9e8'},
+  port:    {w:118,h:96, col:'#9aaee8'},
+  device:  {w:128,h:108,col:'#cfd6f5'},
+  unknown: {w:146,h:114,col:'#ffc65c'},
+  dhcproot:{w:150,h:124,col:'#66d9e8'},
+  dhcpnet: {w:146,h:122,col:'#9fb4ff'},
+  dhcpgroup:{w:138,h:112,col:'#c9a0dc'},
+  dhcpres: {w:128,h:108,col:'#7f849e'},
+};
+const KW = k => KIND[k].w, KH = k => KIND[k].h;
+const STATECOL = {seen:'#7fd88f',quiet:'#5b6180',side:'#ffc65c'};
+
+/* Jeder Knoten hat eine Rolle, und die Rolle bestimmt, wie laut er sein darf.
+   Nur der Brennpunkt ist voll da; alles andere ist gestuft zurueckgenommen —
+   sonst schreit die ganze Leinwand gleich laut und man sieht nicht, wo man steht. */
+const ROLE = {
+  focus : {op:1,   mix:0,   text:1,   halo:.32},
+  child : {op:.88, mix:.26, text:.78, halo:0},
+  parent: {op:.50, mix:.55, text:.60, halo:0},
+  anc   : {op:.24, mix:.80, text:.22, halo:0},
+  peek  : {op:.54, mix:.48, text:.58, halo:0},
+  sib   : {op:.13, mix:.88, text:0,   halo:0},
+};
+const GROUND=[5,6,10];
+const rgb=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+const hx =c=>'#'+c.map(v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join('');
+function mixDown(hex,f){                    // Richtung Hintergrund
+  if(!f) return hex;
+  return hx(rgb(hex).map((v,i)=>v+(GROUND[i]-v)*f));
+}
+function mix2(a,b,f){                       // a nach b
+  const x=rgb(a),y=rgb(b); return hx(x.map((v,i)=>v+(y[i]-v)*f));
+}
+const PLATE='#141826';                      // Traegerflaeche der Knoten
+const KINDWORT={fw:'Firewall',root:'WLAN',switch:'Switch',net:'IP-Netz',
+                ap:'Access Point',port:'Port',device:'Gerät',unknown:'vermutet',
+                dhcproot:'DHCP',dhcpnet:'DHCP-Netz',dhcpgroup:'DHCP-Gruppe',
+                dhcpres:'DHCP-Eintrag'};
+
+
+/* ============================================================
+   Symbolsatz — von Hand gezeichnet, 24x24, reine Linien.
+   Keine Abhaengigkeit, keine Schriftart, kein Nachladen: die Symbole
+   werden als SVG-Datenadresse in den Knoten gelegt und je Farbe
+   einmal gebaut und behalten.
+   ============================================================ */
+const GLYPH = {
+firewall:'<path d="M12 2.5 20 5.4v5.3c0 5-3.3 8.6-8 11-4.7-2.4-8-6-8-11V5.4Z"/><path d="M4.4 9h15.2M9 5.9v2.9M15 5.9v2.9M7 9v3.2M13 9v3.2M17.4 9v2.6"/>',
+switch:'<rect x="2.2" y="7" width="19.6" height="10" rx="2.2"/><path d="M5 10.6v2.8M7.6 10.6v2.8M10.2 10.6v2.8M12.8 10.6v2.8M15.4 10.6v2.8"/><circle cx="19" cy="11.1" r=".85"/><circle cx="19" cy="13.6" r=".85"/>',
+router:'<rect x="2.2" y="12" width="19.6" height="8" rx="2.2"/><path d="M6 15.6v1.2M9 15.6v1.2M12 15.6v1.2"/><circle cx="18.6" cy="16.2" r=".85"/><path d="M12 12V8M12 8l3.6-3.4M12 8 8.4 4.6"/>',
+ap:'<path d="M4.6 17.6h14.8l-4.2-6.2H8.8Z"/><path d="M12 11.4V9"/><path d="M8.6 6.6a5 5 0 0 1 6.8 0M6.2 4.1a8.6 8.6 0 0 1 11.6 0"/>',
+server:'<rect x="3.2" y="3.4" width="17.6" height="7" rx="1.7"/><rect x="3.2" y="13.6" width="17.6" height="7" rx="1.7"/><path d="M6.4 6.9h.02M6.4 17.1h.02"/><circle cx="6.4" cy="6.9" r=".9"/><circle cx="6.4" cy="17.1" r=".9"/><path d="M15 6.9h3M15 17.1h3"/>',
+nas:'<rect x="4" y="2.8" width="16" height="18.4" rx="2"/><path d="M8 6.4v11M12 6.4v11M16 6.4v11"/>',
+laptop:'<path d="M5 5.4h14v10H5Z"/><path d="M2.4 18.6h19.2l-1.6-3.2H4Z"/>',
+tablet:'<rect x="5.4" y="2.6" width="13.2" height="18.8" rx="2.2"/><path d="M10.6 18.6h2.8"/>',
+phone:'<rect x="7" y="2.4" width="10" height="19.2" rx="2.4"/><path d="M10.4 5.2h3.2"/><circle cx="12" cy="18.4" r="1"/>',
+camera:'<path d="M3.4 8.2h11.4v8.6H3.4Z" /><path d="M14.8 11.2 20.6 8v9l-5.8-3.2Z"/><circle cx="8.6" cy="12.5" r="2.4"/>',
+printer:'<path d="device-4b8c 3.4h10v4.2H7Z"/><rect x="3" y="7.6" width="18" height="7.6" rx="1.8"/><path d="device-4b8c 15.2h10v5.4H7Z"/><circle cx="17.6" cy="10.4" r=".9"/>',
+tv:'<rect x="2.6" y="4" width="18.8" height="12.2" rx="1.8"/><path d="M8.4 20h7.2M12 16.2V20"/>',
+console:'<path d="device-4b8c.6 8.6h8.8a5 5 0 0 1 4.9 4.1l.5 3.2a2.5 2.5 0 0 1-4.5 1.9l-1.5-2.1H8.2l-1.5 2.1a2.5 2.5 0 0 1-4.5-1.9l.5-3.2a5 5 0 0 1 4.9-4.1Z"/><path d="M6.2 12.2v2.2M5.1 13.3h2.2"/><circle cx="16.2" cy="12.4" r=".95"/><circle cx="18.2" cy="14.2" r=".95"/>',
+speaker:'<rect x="6" y="2.6" width="12" height="18.8" rx="2.2"/><circle cx="12" cy="8" r="2"/><circle cx="12" cy="15.4" r="3.2"/>',
+sensor:'<circle cx="12" cy="12" r="2.4"/><path d="M8.2 8.2a5.4 5.4 0 0 0 0 7.6M15.8 8.2a5.4 5.4 0 0 1 0 7.6M5.4 5.4a9.3 9.3 0 0 0 0 13.2M18.6 5.4a9.3 9.3 0 0 1 0 13.2"/>',
+light:'<path d="M9 17.2a6 6 0 1 1 6 0v1.4H9Z"/><path d="M9.6 20.8h4.8"/>',
+heating:'<rect x="3.4" y="9.6" width="17.2" height="10.8" rx="1.8"/><path d="device-4b8c.6 12.4v5.2M12 12.4v5.2M16.4 12.4v5.2"/><path d="M8.6 6.4c0-1.6 1.8-1.8 1.8-3.4M14 6.4c0-1.6 1.8-1.8 1.8-3.4"/>',
+solar:'<rect x="2.8" y="5" width="18.4" height="10.4" rx="1.6"/><path d="M8.2 5 6.6 15.4M14 5l-1.6 10.4M19.8 5l-1.6 10.4M4.2 10.2h16.4"/><path d="M12 18.4V21"/>',
+car:'<rect x="4.4" y="3" width="9.6" height="18" rx="2"/><path d="device-4b8c.4 8.2h3.6M7.4 11.4h3.6"/><path d="M14 8.6h3a2 2 0 0 1 2 2v5.2a1.8 1.8 0 0 0 1.8 1.8"/>',
+robot:'<circle cx="12" cy="12" r="9.2"/><circle cx="12" cy="12" r="3.4"/><path d="M4.2 8.6h15.6"/>',
+washer:'<rect x="4" y="2.8" width="16" height="18.4" rx="2"/><circle cx="12" cy="14" r="4.6"/><path d="device-4b8c.4 6.4h1.6M16.4 6.4h.02"/><circle cx="16.4" cy="6.4" r=".8"/>',
+reader:'<rect x="5" y="2.8" width="14" height="18.4" rx="1.8"/><path d="M8.2 7.4h7.6M8.2 10.6h7.6M8.2 13.8h4.8"/>',
+chip:'<rect x="6.6" y="6.6" width="10.8" height="10.8" rx="1.6"/><path d="M9.8 3.2v3.4M14.2 3.2v3.4M9.8 17.4v3.4M14.2 17.4v3.4M3.2 9.8h3.4M3.2 14.2h3.4M17.4 9.8h3.4M17.4 14.2h3.4"/>',
+net:'<circle cx="12" cy="4.6" r="2.2"/><circle cx="4.8" cy="18" r="2.2"/><circle cx="19.2" cy="18" r="2.2"/><path d="M10.6 6.6 6.2 16M13.4 6.6 17.8 16M7 18h10"/>',
+vm:'<rect x="2.6" y="4.4" width="18.8" height="13" rx="2" stroke-dasharray="3 2.4"/><rect x="8.4" y="8.6" width="7.2" height="4.6" rx="1"/><path d="M8 20.6h8"/>',
+unknown:'<rect x="3.4" y="3.4" width="17.2" height="17.2" rx="3"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.1 2.4c-.5.2-.7.6-.7 1.1v.7"/><circle cx="12" cy="16.6" r="1"/>',
+wlan:'<path d="M12 18.8h.02"/><circle cx="12" cy="18.6" r="1.2"/><path d="M8.4 14.6a5.2 5.2 0 0 1 7.2 0M5.4 11.2a9.6 9.6 0 0 1 13.2 0M2.6 7.8a13.8 13.8 0 0 1 18.8 0"/>',
+portUsed:'<rect x="4.4" y="7" width="15.2" height="10" rx="1.6"/><path d="M8.6 7v-2h6.8v2"/><path d="M8.4 12.6h7.2"/>',
+portFree:'<rect x="4.4" y="7" width="15.2" height="10" rx="1.6" stroke-dasharray="2.6 2.2"/><path d="M8.6 7v-2h6.8v2"/>',
+  portUp:'<rect x="4.4" y="7" width="15.2" height="10" rx="1.6"/><path d="M8.6 7v-2h6.8v2"/><path d="M12 15.4V9.6M12 9.6 9.4 12.2M12 9.6l2.6 2.6"/>',
+  portLag:'<rect x="3" y="5" width="15.2" height="10" rx="1.6"/><rect x="5.8" y="9" width="15.2" height="10" rx="1.6"/><path d="device-4b8c.2 10.6h6.8M10 14.6h6.8"/>',
+  dhcp:'<rect x="3.2" y="3.4" width="17.6" height="7" rx="1.7"/><rect x="3.2" y="13.6" width="17.6" height="7" rx="1.7"/><path d="M6.4 6.9h.02M6.4 17.1h.02"/><circle cx="6.4" cy="6.9" r=".9"/><circle cx="6.4" cy="17.1" r=".9"/><path d="M14 6.9h4M14 17.1h4"/>',
+};
+const _ic=new Map();
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+/* Die Karte wird als SVG gezeichnet, nicht beschriftet — nur so lassen sich
+   Groesse und Farbe der Zeilen einzeln bestimmen. Eine cytoscape-Beschriftung
+   kennt nur eine Schrift und eine Farbe fuer alles.
+   `detail=false` zeichnet nur das Symbol, gross und mittig: bei kleinem
+   Massstab waere der Text ohnehin nicht mehr zu lesen. */
+function card(name,col,w,h,lines,colA,colB,sw,detail,mark,pin,badge,meter,health,fund,poe){
+  const key=[name,col,w,h,colA,colB,sw,detail?1:0,mark||'',pin?'n':'',badge||'',
+             meter===undefined?'':meter,health||'',fund?'f':'',poe||'',lines.join('\u0001')].join('|');
+  let v=_ic.get(key); if(v) return v;
+
+  const g=(GLYPH[name]||GLYPH.unknown);
+  const rows=(lines||[]).filter(Boolean);
+  let body;
+  if(detail && rows.length){
+    /* Die Zeile klebt am unteren Rand \u2014 so steht sie bei jeder Karte an
+       derselben Stelle und das Auge findet sie, ohne zu suchen. */
+    const band = 15 + rows.length*13;          // Streifen unten fuer den Text
+    const free = h - band;                     // Rest fuer das Symbol
+    const gs   = Math.min(40, free*0.72, w*0.42);
+    body='<g transform="translate('+((w-gs)/2).toFixed(1)+','+((free-gs)/2+2).toFixed(1)+') scale('
+       +(gs/24).toFixed(4)+')" stroke="'+col+'" stroke-width="'+(sw*24/gs*1.15).toFixed(2)
+       +'" fill="none" stroke-linecap="round" stroke-linejoin="round">'+g+'</g>';
+    body+='<path d="M'+(w*0.17).toFixed(1)+' '+(free+1).toFixed(1)+'H'+(w*0.83).toFixed(1)
+       +'" stroke="'+colB+'" stroke-width=".8" opacity=".45"/>';
+    let y=free+16;
+    rows.forEach((tx,i)=>{
+      body+='<text x="'+(w/2).toFixed(1)+'" y="'+y.toFixed(1)+'" text-anchor="middle"'
+          +' fill="'+(i?colB:colA)+'" stroke="none"'
+          +' font-family="'+(i?'Segoe UI, Roboto, Helvetica, Arial, sans-serif'
+                             :'Consolas, DejaVu Sans Mono, Menlo, monospace')+'"'
+          +' font-size="'+(i?10.4:12.4)+'">'+esc(tx)+'</text>';
+      y+=13;
+    });
+  }else{
+    const gs=Math.min(h*0.56,w*0.56);
+    body='<g transform="translate('+((w-gs)/2).toFixed(1)+','+((h-gs)/2).toFixed(1)+') scale('
+       +(gs/24).toFixed(4)+')" stroke="'+col+'" stroke-width="'+(sw*24/gs*1.15).toFixed(2)
+       +'" fill="none" stroke-linecap="round" stroke-linejoin="round">'+g+'</g>';
+  }
+  if(pin){
+    /* Eine Reissnadel unten links: hier hat jemand etwas eingetragen. Klein,
+       aber sichtbar — sonst findet man die Angabe nie wieder. */
+    const px=14, py=h-13;
+    body+='<g stroke="'+colB+'" stroke-width="1.5" fill="none" stroke-linecap="round">'
+       +'<path d="M'+px+' '+(py+5)+'v-4"/>'
+       +'<path d="M'+(px-4.5)+' '+(py-1)+'h9l-1.6-3.2v-3.4h.9v-1.6h-6.6v1.6h.9v3.4Z"/></g>';
+  }
+  if(badge){
+    /* Die Plakette macht Rolle oder Buendel sichtbar, bevor Kleingedrucktes lesbar ist. */
+    const bw=Math.max(24,8+String(badge).length*5.5);
+    body+='<rect x="7" y="7" width="'+bw+'" height="14" rx="7" fill="'+col+'" opacity=".94"/>'
+      +'<text x="'+(7+bw/2)+'" y="17.2" text-anchor="middle" fill="#090b12" stroke="none"'
+      +' font-family="Segoe UI,Arial,sans-serif" font-size="8.2" font-weight="700">'+esc(badge)+'</text>';
+  }
+  if(poe){
+    const bx=badge?38:7, bw=Math.max(34,8+String(poe).length*5.2);
+    body+='<rect x="'+bx+'" y="7" width="'+bw+'" height="14" rx="7" fill="#2d2612" stroke="#80661e" stroke-width=".7"/>'
+      +'<text x="'+(bx+bw/2)+'" y="17.2" text-anchor="middle" fill="#ffc65c" stroke="none"'
+      +' font-family="Segoe UI Symbol,Segoe UI,Arial,sans-serif" font-size="8.2" font-weight="700">'+esc(poe)+'</text>';
+  }
+  if(meter!==undefined){
+    const mw=w-24, anteil=Math.max(0,Math.min(1,Number(meter)||0));
+    body+='<rect x="12" y="'+(h-7)+'" width="'+mw+'" height="3" rx="1.5" fill="#30364a"/>'
+      +'<rect x="12" y="'+(h-7)+'" width="'+(mw*anteil).toFixed(1)+'" height="3" rx="1.5" fill="'+col+'"/>';
+  }
+  if(mark){
+    /* Marke oben rechts: Farbe UND Zeichen, damit sie nicht nur farblich wirkt. */
+    const mx=w-15, my=15, c=MARKFARBE[mark];
+    body+='<circle cx="'+mx+'" cy="'+my+'" r="8.5" fill="'+c+'" stroke="#080a11" stroke-width="2"/>';
+    const z = mark==='neu' ? '<path d="M'+(mx-4)+' '+my+'h8M'+mx+' '+(my-4)+'v8"/>'
+            : mark==='weg' ? '<path d="M'+(mx-3.6)+' '+(my-3.6)+'l7.2 7.2M'+(mx+3.6)+' '+(my-3.6)+'l-7.2 7.2"/>'
+            : mark==='warn' ? '<path d="M'+mx+' '+(my-4.5)+'v5.5M'+mx+' '+(my+4)+'h.01"/>'
+            : '<path d="M'+(mx-4.2)+' '+(my+2)+'h8.4M'+(mx+1.6)+' '+(my-1.6)+'l3 3.6-3 3.6"/>';
+    body+='<g stroke="#08100a" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" fill="none">'+z+'</g>';
+  }
+  if(health){
+    /* Gesundheit sitzt oben mittig; Aenderungen behalten die rechte Ecke. */
+    const hx=w/2, hc=health==='crit'?'#ff6b6b':'#ffc65c';
+    body+='<path d="M'+hx+' 5l7 12H'+(hx-7)+'Z" fill="'+hc+'" stroke="#080a11" stroke-width="1.5"/>'
+      +'<path d="M'+hx+' 9v3.8M'+hx+' 15h.01" stroke="#11131a" stroke-width="1.6" stroke-linecap="round"/>';
+  }
+  if(fund){
+    /* Fund unten rechts kollidiert weder mit Aenderung noch Gesundheit. */
+    const fx=w-14,fy=h-14;
+    body+='<rect x="'+(fx-6)+'" y="'+(fy-6)+'" width="12" height="12" rx="2" transform="rotate(45 '+fx+' '+fy+')" fill="#ffc65c" stroke="#080a11" stroke-width="1.5"/>'
+      +'<path d="M'+fx+' '+(fy-3)+'v4M'+fx+' '+(fy+3.5)+'h.01" stroke="#11131a" stroke-width="1.6" stroke-linecap="round"/>';
+  }
+  const s='<svg xmlns="http://www.w3.org/2000/svg" width="'+w+'" height="'+h
+        +'" viewBox="0 0 '+w+' '+h+'">'+body+'</svg>';
+  v='data:image/svg+xml;utf8,'+encodeURIComponent(s);
+  _ic.set(key,v); return v;
+}
+
+/* Geraetetyp -> Symbol */
+const TYPGLYPH=[
+  [/laptop/i,'laptop'],[/tablet/i,'tablet'],[/telefon/i,'phone'],[/lesege/i,'reader'],
+  [/nas/i,'nas'],[/server|vpn-wirt|teddy/i,'server'],[/firewall/i,'firewall'],
+  [/drucker/i,'printer'],[/einplatinen/i,'chip'],[/kamera/i,'camera'],
+  [/heizung/i,'heating'],[/wechselrichter/i,'solar'],[/wallbox/i,'car'],
+  [/fernseher/i,'tv'],[/konsole/i,'console'],[/netzwerkplayer/i,'speaker'],
+  [/saugroboter/i,'robot'],[/waschmaschine/i,'washer'],[/licht/i,'light'],
+  [/sensor|espressif/i,'sensor'],[/reolink/i,'camera'],[/synology/i,'nas'],
+  [/apple|samsung|google/i,'phone'],[/raspberry/i,'chip'],[/ubiquiti/i,'ap'],
+  [/brother|\bhp\b|canon/i,'printer'],[/sonos/i,'speaker'],
+];
+function glyphFor(id){
+  const n=N.get(id);
+  if(n.kind==='fw')      return 'firewall';
+  if(n.kind==='switch')  return 'switch';
+  if(n.kind==='ap')      return 'ap';
+  if(n.kind==='net')     return 'net';
+  if(n.kind==='root')    return 'wlan';
+  if(n.kind==='dhcproot')return 'dhcp';
+  if(n.kind==='dhcpnet') return 'net';
+  if(n.kind==='dhcpgroup')return n.art==='statisch'?'unknown':'dhcp';
+  if(n.kind==='dhcpres') return 'unknown';
+  if(n.kind==='unknown') return 'unknown';
+  if(n.kind==='port')    return n.bundle>1?'portLag':n.uplink?'portUp':(n.belegt?'portUsed':'portFree');
+  const d=byId.get(id);
+  if(d) for(const [re,g] of TYPGLYPH)
+    if(re.test([d.typ,d.hersteller,d.label].filter(Boolean).join(' '))) return g;
+  return 'unknown';
+}
+
+const els=[];
+for(const [id,n] of N){
+  els.push({data:{id,label:n.label,kind:n.kind}, position:{x:0,y:0}, classes:n.kind});
+}
+for(const lens of ['topo','ipnet','ap','dhcp']){
+  for(const a in kids[lens]) for(const b of kids[lens][a]){
+    const m = edgeMeta.get(lens+':'+a+'>'+b)||{};
+    els.push({data:{id:'e:'+lens+':'+a+'>'+b,source:a,target:b,lens,
+      w:m.bundle>=2?4.5:(m.speed===100?1:2),
+      dash:m.inferred?'dashed':'solid',
+      elabel:m.bundle>=2?m.bundle+'× '+tempoKurz(Math.max(1,Math.round(
+        (m.speed||1000*m.bundle)/m.bundle))):(m.label||'')}});
+  }
+}
+
+const cy = cytoscape({
+  container:document.getElementById('cy'),
+  elements:els,
+  minZoom:.12,maxZoom:3.4,
+  wheelSensitivity:.28,
+  autoungrabify:true,
+  /* Ziehen auf dem Hintergrund soll immer verschieben, nie einen Rahmen aufziehen */
+  userPanningEnabled:true, userZoomingEnabled:true,
+  boxSelectionEnabled:false, autounselectify:true,
+  style:[
+    {selector:'node',style:{
+      'label':'data(label)','color':'#e9e7f2',
+      'font-family':'Antonio, sans-serif','font-size':15,'font-weight':600,
+      'text-valign':'bottom','text-margin-y':7,'text-halign':'center',
+      'text-wrap':'wrap','line-height':1.34,
+      'letter-spacing':1.2,
+      'text-outline-width':3,'text-outline-color':'#05060a',
+      'border-width':2,'border-color':'#05060a',
+      'width':60,'height':60,'opacity':0,'display':'none',
+      'transition-property':'none',
+    }},
+    {selector:'node',style:{
+      'shape':'round-rectangle',
+      'background-fit':'none','background-clip':'none',
+      'background-image-containment':'over','background-repeat':'no-repeat',
+      'background-position-x':'50%','background-position-y':'50%',
+    }},
+    {selector:'node.port',style:{'font-family':'JetBrains Mono, monospace','font-size':9,'font-weight':400,'letter-spacing':0,'text-margin-y':4}},
+    {selector:'node.device',style:{'font-size':13}},
+    {selector:'edge',style:{
+      'curve-style':'taxi','taxi-direction':'downward','taxi-turn':'42%',
+      'taxi-turn-min-distance':'14px','width':'data(w)',
+      'line-color':'#2c3245','line-style':'data(dash)',
+      'opacity':0,'display':'none',
+      'label':'data(elabel)','font-family':'JetBrains Mono, monospace','font-size':8,
+      'color':'#7f849e','text-outline-width':3,'text-outline-color':'#05060a',
+      'text-rotation':'autorotate','text-margin-y':-7,
+    }},
+  ],
+});
+
+let MEHR={eltern:null,ids:[]};
+const STARTPARAMS=new URLSearchParams(location.hash.replace(/^#/,''));
+const STARTLINSE=['topo','ipnet','ap','dhcp'].includes(STARTPARAMS.get('linse'))
+  ? STARTPARAMS.get('linse') : 'topo';
+let lens=STARTLINSE;
+const STANDARD_FOKUS=SWITCHES.some(s=>s.id==='c3po')?'c3po':STAND.wurzel;
+const STARTFOKUS=STARTPARAMS.get('fokus');
+let focus=STARTFOKUS&&N.has(STARTFOKUS)
+  &&(STARTFOKUS===ROOT[lens]||par[lens][STARTFOKUS]!==undefined)?STARTFOKUS
+  :(lens==='topo'?STANDARD_FOKUS:ROOT[lens]);
+let openCard=null;
+
+function hashSchreiben(panel){
+  const p=new URLSearchParams();p.set('linse',lens);p.set('fokus',focus);
+  const offen=panel||(!document.getElementById('findings').hidden?'funde':
+    !document.getElementById('changes').hidden?'changes':'');
+  if(offen)p.set('panel',offen);
+  history.replaceState(null,'','#'+p.toString());
+}
+
+/* --- Welche Elemente sind sichtbar und wo liegen sie --- */
+function ancestors(id){
+  const out=[];let c=par[lens][id];let g=0;
+  while(c && g++<24){out.push(c);c=par[lens][c];}
+  return out;
+}
+function plan(){
+  const Kroh = kids[lens][focus]||[];
+  const anc = ancestors(focus);
+  const parent = anc[0];
+  const sibs = parent ? (kids[lens][parent]||[]).filter(x=>x!==focus) : [];
+
+  const P = new Map();   // id -> {x,y,scale,op}
+  const fk = N.get(focus).kind;
+
+  P.set(focus,{x:0,y:0,scale:1.18,role:'focus'});
+
+  /* **Alle** Kinder werden gezeichnet. Die Belastungsprobe hatte nicht zu viele
+     Knoten gezeigt, sondern einen Ausschnitt, der sie alle hineinzwingen wollte
+     und dabei auf Massstab 0,22 ging. Die Antwort ist nicht weniger zu zeigen,
+     sondern den Massstab zu halten und die Leinwand breit werden zu lassen. */
+  const K = Kroh;
+  MEHR = {eltern:focus, ids:Kroh};
+
+  /* Kinder fächern unter dem Brennpunkt auf */
+  const kk = K.length;
+  if(kk){
+    /* Grundabstand nach Art der Kinder, aber gedeckelt: eine lange Reihe darf
+       die Leinwand nicht so breit machen, dass alles winzig herausgezoomt wird. */
+    /* Voller Abstand, ohne Deckel: dass die Reihe breiter wird als der Schirm,
+       ist jetzt gewollt. Den Massstab haelt der Ausschnitt weiter unten. */
+    const step = K.some(i=>N.get(i).kind==='port') ? 152
+               : K.some(i=>N.get(i).kind==='device') ? 176 : 196;
+    /* **Eine** Reihe, so lang sie werden will — nach links und rechts gibt es
+       keinen Rand. Kein Umbruch, keine Seiten, keine Raster: die Kinder einer
+       Ebene stehen nebeneinander wie die Blende an einem Geraet, und man faehrt
+       daran entlang.
+       Die Reihe haengt IMMER mittig unter dem Brennpunkt, egal wie lang sie ist.
+       Der Brennpunkt steht damit ueber ihrer Mitte, und man faehrt von dort nach
+       beiden Seiten — nicht nur nach rechts. */
+    const x0 = -(kk-1)/2*step;
+    K.forEach((id,i)=>{
+      P.set(id,{ x:x0+i*step, y:245, scale:.74, role:'child' });
+    });
+
+    /* Ein Blick voraus: was haengt hinter jedem Kind? Klein und blass, aber
+       vorhanden - man soll sehen koennen, ob sich der naechste Klick lohnt.
+       Bei sehr vielen Kindern entfaellt er, sonst wird das Bild unruhig. */
+    if(kk<=14){
+      K.forEach(id=>{
+        const gk=kids[lens][id]||[]; if(!gk.length) return;
+        const c=P.get(id);
+        const n=Math.min(gk.length,4);
+        const gstep=Math.min(70, step/Math.max(1,n));
+        gk.slice(0,n).forEach((g,j)=>{
+          if(P.has(g)) return;
+          P.set(g,{x:c.x+(j-(n-1)/2)*gstep, y:c.y+152, scale:.42, role:'peek',
+                   mehr: gk.length>n && j===n-1 ? gk.length-n : 0});
+        });
+      });
+    }
+  }
+
+  /* Vorfahren treten zurück: kleiner, blasser, nach oben gestaffelt */
+  const AY=[-178,-280,-352,-406,-447,-479];
+  const AS=[.52,.36,.27,.22,.19,.17];
+  anc.forEach((id,i)=>{
+    const j=Math.min(i,AY.length-1);
+    P.set(id,{x:0,y:AY[j],scale:AS[j],role:i?'anc':'parent'});
+  });
+
+  /* Geschwister bleiben auf Höhe des Brennpunkts, deutlich blasser */
+  const half = (P.get(K[0])? Math.abs(P.get(K[0]).x):0);
+  const gap = Math.max(330, half+230);
+  /* Hoechstens acht Geschwister. Alles darueber bliebe unsichtbar im Aus und
+     wuerde nur Rechenzeit kosten — dafuer ist die Suche da. */
+  sibs.slice(0,8).forEach((id,i)=>{
+    const side = i%2? 1:-1, rank=Math.floor(i/2);
+    P.set(id,{x:side*(gap+rank*190),y:-20,scale:.42,role:'sib'});
+  });
+
+  return {P,K,anc};
+}
+
+function apply(animate){
+  if(typeof swqMarkieren==='function') swqMarkieren();
+  const {P,K} = plan();
+  LASTP = P;
+  const vis = new Set(P.keys());
+  const d = animate?DUR:0;
+
+  cy.batch(()=>{
+    cy.nodes().forEach(n=>{
+      const id=n.id(), t=P.get(id), k=KIND[N.get(id).kind];
+      const wasVisible = n.style('display')!=='none';
+      if(!t){
+        if(wasVisible){
+          if(d) n.stop().animate({style:{opacity:0}},{duration:d*.55,easing:EASE,
+                complete:()=>{ if(!P.has(id)) n.style('display','none'); }});
+          else n.style({opacity:0,display:'none'});
+        }
+        return;
+      }
+      const nw = k.w*t.scale, nh = k.h*t.scale;
+      const nn = N.get(id);
+      const R  = ROLE[t.role];
+      const frei = nn.kind==='port' && !nn.belegt;
+      const gesundheit=portGesundheit(nn);
+      const unbenannt=nn.kind==='device'&&!nameVorhanden(byId.get(id));
+      /* Kennfarbe: bei Geraeten sagt der Rand den Zustand und das Symbol den Typ.
+         Bei allem anderen tragen Rand und Symbol dieselbe Kennfarbe. */
+      const ident = nn.kind==='device' ? STATECOL[nn.state]
+                  : nn.kind==='dhcpres' ? '#5b6180'
+                  : nn.kind==='switch'&&nn.rolle==='KERN' ? '#ff9f45'
+                  : nn.kind==='switch'&&nn.rolle==='ZUGANG' ? '#9fb4ff'
+                   : gesundheit==='crit' ? '#ff6b6b'
+                   : gesundheit==='warn' ? '#ffc65c'
+                   : frei ? '#464e6d'
+                  : nn.kind==='port' && nn.uplink ? '#9fb4ff' : k.col;
+      const isF = t.role==='focus';
+      const isPort = nn.kind==='port';
+      const glyphCol = mixDown(
+        mix2(nn.kind==='device' ? '#dfe4ff' : ident, '#ffffff', isF?.5:.34),
+        R.mix*.6);
+      const plate = mixDown(mix2(PLATE, ident, isF?.17:.07), R.mix*.55);
+      const target = {
+        width:nw, height:nh, opacity:R.op,
+        'background-color': plate,
+        'background-width':  Math.round(nw),
+        'background-height': Math.round(nh),
+        'background-image-opacity': isF?1:.92,
+        'font-size': isF ? 19
+                   : t.role==='peek'   ? 10
+                   : t.role==='child'  ? 14
+                   : t.role==='parent' ? 12
+                   : 11,
+        'text-opacity': R.text*(unbenannt?.62:1),
+        'color': isF ? '#ff9f45' : mixDown(frei||unbenannt?'#5a6280':'#e9e7f2', R.mix*.75),
+        'border-color': gesundheit ? (gesundheit==='crit'?'#ff6b6b':'#ffc65c')
+                                  : isF ? '#ff9f45' : mixDown(ident, R.mix*.45),
+        'border-width': isF ? 3 : 1.6,
+        'underlay-opacity': R.halo,
+        'underlay-padding': isF ? 22 : 0,
+      };
+      /* nicht animierbar — direkt setzen, sonst bleibt die Bewegung stehen
+         oder das Symbol erscheint gar nicht erst */
+      n.style({'label': labelShort(id),
+               'font-family':isPort||unbenannt?'JetBrains Mono, monospace':'Antonio, sans-serif',
+               'font-weight':unbenannt?400:isF?700:t.role==='peek'?400:600,
+               'text-margin-y':isF?14:t.role==='peek'?4:8,
+               'underlay-color':'#ff9f45'});
+      paintCard(n, t, nw, nh, glyphCol, isF);
+      if(!wasVisible){
+        const from = P.get(par[lens][id]) || P.get(focus) || {x:0,y:0};
+        n.position({x:from.x,y:from.y});
+        n.style({...target, width:nw*.3, height:nh*.3, opacity:0, display:'element'});
+      }
+      if(d) n.stop().animate({position:{x:t.x,y:t.y},style:target},{duration:d,easing:EASE});
+      else  n.position({x:t.x,y:t.y}).style({...target,display:'element'});
+    });
+
+    cy.edges().forEach(e=>{
+      const on = e.data('lens')===lens && vis.has(e.data('source')) && vis.has(e.data('target'));
+      if(!on){
+        if(e.style('display')==='none') return;
+        if(d) e.stop().animate({style:{opacity:0}},{duration:d*.5,easing:EASE,
+              complete:()=>{ e.style('display','none'); }});
+        else  e.style({display:'none',opacity:0});
+        return;
+      }
+      const s=P.get(e.data('source')), t=P.get(e.data('target'));
+      const lit = e.data('source')===focus || e.data('target')===focus;
+      const chainEdge = !lit && (s.role==='parent'||s.role==='anc') && (t.role==='parent'||t.role==='anc');
+      const peekEdge  = t.role==='peek';
+      const op = lit ? .9 : chainEdge ? .32 : peekEdge ? .20 : .07;
+      if(e.style('display')==='none') e.style({display:'element',opacity:0});
+      const st={opacity:op,'line-color':lit?'#ff9f45':'#333a52','text-opacity':lit?.9:0};
+      if(d) e.stop().animate({style:st},{duration:d,easing:EASE});
+      else  e.style(st);
+    });
+  });
+
+  /* Der Ausschnitt wird aus den ZIELpositionen gerechnet, nicht aus den aktuellen —
+     sonst richtet er sich nach dem Bild von eben, das gerade erst wegwandert.
+     Die beiden naechsten Vorfahren kommen mit: das Zurueckgetretene muss im Bild
+     bleiben, sonst verliert man doch, woher man kam. */
+  const anc2 = ancestors(focus).slice(0,2);
+  const peeks = [...P.keys()].filter(i=>P.get(i).role==='peek');
+  const inBox = [focus,...K,...anc2,...peeks].filter(i=>P.has(i));
+  let x1=1e9,y1=1e9,x2=-1e9,y2=-1e9;
+  inBox.forEach(i=>{
+    const q=P.get(i), kk2=KIND[N.get(i).kind];
+    const hw=kk2.w*q.scale/2+18, hh=kk2.h*q.scale/2+24;
+    x1=Math.min(x1,q.x-hw); x2=Math.max(x2,q.x+hw);
+    y1=Math.min(y1,q.y-hh); y2=Math.max(y2,q.y+hh);
+  });
+  cy.resize();
+  const W=cy.width(), H=cy.height(), pad=K.length>10?34:52;
+  /* Untergrenze: unter diesem Massstab faellt die Beschriftung der Karten weg
+     und man liest nichts mehr. Passt der Inhalt dann nicht mehr ins Bild, ist
+     das in Ordnung — dann wird gezogen und gezoomt. */
+  const ZMIN=0.62;
+  const passend=Math.min((W-2*pad)/Math.max(1,x2-x1),(H-2*pad)/Math.max(1,y2-y1));
+  const z=Math.max(ZMIN, Math.min(1.15, passend));
+  const view = passend >= ZMIN
+    /* Alles passt: mittig auf den gesamten Inhalt. */
+    ? {zoom:z, pan:{x:W/2-z*(x1+x2)/2, y:H/2-z*(y1+y2)/2}}
+    /* Zu breit fuer den Schirm: mittig auf den Brennpunkt, etwas nach oben, damit
+       die Kinder darunter im Bild beginnen. Die Reihe laeuft dann nach beiden
+       Seiten aus dem Bild — gezogen wird nach links wie nach rechts. */
+    : (()=>{ const f=P.get(focus);
+             return {zoom:z, pan:{x:W/2-z*f.x, y:H*0.28-z*f.y}}; })();
+  cy.stop();                       // laufende Kamerafahrt abbrechen, nicht stapeln
+  if(d) cy.animate(view,{duration:d,easing:EASE});
+  else  { cy.zoom(view.zoom); cy.pan(view.pan); }
+
+  hideTip();
+  document.getElementById('mehr').hidden=true;
+  LISTE=null;
+  document.getElementById('pflege').hidden=true;
+  spot.classList.remove('frei');
+  drawChain();
+  drawHere();
+  runSpot(d);
+  if(['device','dhcpres','dhcpnet','port','switch','ap'].includes(N.get(focus).kind)) showCard(focus); else hideCard();
+}
+
+/* --- Wo stehe ich gerade: als Ueberschrift, nicht als Kleingedrucktes --- */
+function drawHere(){
+  const n=N.get(focus);
+  const name = n.kind==='net' ? n.kurz : nodeLabelFull(focus);
+  document.getElementById('hereKind').textContent = n.kind==='switch'
+    ? (n.rolle==='KERN'?'Kern-Switch':n.rolle==='VERTEILER'?'Verteiler-Switch':'Zugangs-Switch')
+    : KINDWORT[n.kind]||n.kind;
+  document.getElementById('hereName').textContent = name;
+  let sub = n.sub||'';
+  if(n.kind==='port') sub = portMode(focus)
+                          + ' · '+(n.fiber?'Glasfaser':'Kupfer')
+                          + (n.bundle>1? ' · '+n.bundle+' Leitungen':'')
+                          + ' · '+tempoLang(n.speed)
+                          + '  · am Gerät: '+n.iface;
+  if(n.kind==='switch'){
+    const s=SWITCHES.find(x=>x.id===focus)||{};
+    if(s.poe_budget_w!==null&&s.poe_budget_w!==undefined)
+      sub += ' · PoE '+messwert(s.poe_w,'')+'/'+s.poe_budget_w+' W';
+  }
+  if(n.kind==='device'){ const d=byId.get(focus); sub = d.typ+' · '+d.ip; }
+  if(n.kind==='dhcproot') sub=n.sub+' · '+DHCP_FUNDE+' Funde';
+  if(n.kind==='dhcpnet') sub=[n.sub,'Pool '+n.belegt+'/'+n.groesse,
+    n.funde?n.funde+' Funde':'keine Funde'].join(' · ');
+  if(n.kind==='dhcpgroup') sub=(kids.dhcp[focus]||[]).length+' Einträge';
+  if(n.kind==='dhcpres') sub=n.dhcp.mac+' · reserviert, nie gesehen';
+  if(n.kind==='net'){
+    const x=NETS.find(v=>v.id===focus);
+    sub = [x.cidr, x.frei===null?'':x.frei+' Adressen frei'].filter(Boolean).join(' · ');
+  }
+  document.getElementById('hereSub').textContent = sub;
+  /* Bei vielen Kindern ein zweiter Weg: dieselbe Menge als filterbare Liste.
+     Nicht als Ersatz fuer die Karte — die zeigt weiterhin alles. */
+  document.getElementById('notizKnopf').classList.toggle('hat', hatPflege(focus));
+  const ab=document.getElementById('alleN');
+  ab.hidden = MEHR.ids.length <= 12;
+  ab.textContent = 'alle '+MEHR.ids.length+' als Liste';
+}
+
+/* Wie viel in einer Karte steht, haengt davon ab, wie gross sie auf dem Schirm
+   ist — semantischer Zoom. Unter einer lesbaren Groesse bleibt nur das Symbol. */
+let LASTP=null;
+function paintCard(n,t,nw,nh,glyphCol,isF){
+  const id=n.id(), nn=N.get(id), k=KIND[nn.kind];
+  const detail = nh*cy.zoom() >= 44 && t.role!=='peek' && t.role!=='sib';
+  const A = isF ? '#ffd9a8' : mixDown('#e9edff', ROLE[t.role].mix*.55);
+  const B = isF ? '#c9a96f' : mixDown('#96a0c4', ROLE[t.role].mix*.55);
+  const ae=CHANGEMAP.get(id);
+  const badge=nn.kind==='switch'?nn.rolle:nn.kind==='port'&&nn.bundle>1?nn.bundle+'×':null;
+  const meter=nn.kind==='dhcpnet'&&nn.groesse?nn.belegt/nn.groesse:undefined;
+  const mark=lens==='dhcp'&&DHCPWARN.has(id)&&t.role!=='sib' ? 'warn'
+            : ae&&t.role!=='sib' ? ae.typ : null;
+  const health=nn.kind==='port'&&t.role!=='sib'?portGesundheit(nn):null;
+  const fund=FUNDMAP.has(id)&&t.role!=='sib';
+  const rp=nn.raw||{};
+  const poe=nn.kind==='port'&&rp.poe==='liefert'
+    ? (rp.poe_w===null||rp.poe_w===undefined?'⚡ PoE':
+      '⚡ '+Number(rp.poe_w).toLocaleString('de-DE',{maximumFractionDigits:1})+' W') : null;
+  n.style('background-image',
+    card(glyphFor(id), glyphCol, Math.round(k.w), Math.round(k.h),
+         cardLines(id), A, B, nn.kind==='port'?1.95:1.62, detail,
+         mark, detail && hatPflege(id),badge,meter,health,fund,poe));
+}
+function repaintCards(){
+  if(!LASTP) return;
+  cy.batch(()=>{
+    LASTP.forEach((t,id)=>{
+      const n=cy.$id(id); if(!n.length||n.style('display')==='none') return;
+      const k=KIND[N.get(id).kind];
+      const nn=N.get(id), R=ROLE[t.role], isF=t.role==='focus';
+      const frei = nn.kind==='port' && !nn.belegt;
+      const gesundheit=portGesundheit(nn);
+      const ident = nn.kind==='device' ? STATECOL[nn.state]
+                  : nn.kind==='dhcpres' ? '#5b6180'
+                  : nn.kind==='switch'&&nn.rolle==='KERN' ? '#ff9f45'
+                  : nn.kind==='switch'&&nn.rolle==='ZUGANG' ? '#9fb4ff'
+                   : gesundheit==='crit' ? '#ff6b6b'
+                   : gesundheit==='warn' ? '#ffc65c'
+                   : frei ? '#464e6d'
+                  : nn.kind==='port' && nn.uplink ? '#9fb4ff' : k.col;
+      const glyphCol = mixDown(mix2(nn.kind==='device' ? '#dfe4ff' : ident,
+                                    '#ffffff', isF?.5:.34), R.mix*.6);
+      paintCard(n,t,k.w*t.scale,k.h*t.scale,glyphCol,isF);
+    });
+  });
+}
+let zoomRAF=0;
+cy.on('zoom',()=>{ if(!zoomRAF) zoomRAF=requestAnimationFrame(()=>{zoomRAF=0;repaintCards();}); });
+
+/* --- Kette in der Kopfzeile --- */
+function drawChain(){
+  const path=[...ancestors(focus)].reverse().concat([focus]);
+  const c=document.getElementById('chain');
+  c.textContent='';
+  const dp=document.createElement('span');dp.className='depth';
+  dp.textContent='Ebene '+(path.length-1);
+  c.append(dp);
+  path.forEach((id,i)=>{
+    if(i){const s=document.createElement('span');s.className='sep';s.textContent='→';c.append(s);}
+    const b=document.createElement('button');
+    const n=N.get(id);
+    b.textContent = n.kind==='net' ? n.kurz : nodeLabelFull(id);
+    if(id===focus) b.setAttribute('aria-current','true');
+    b.onclick=()=>go(id);
+    c.append(b);
+  });
+}
+
+function go(id){
+  if(!N.has(id)) return;
+  focus=id;
+  hashSchreiben();
+  apply(true);
+}
+
+cy.on('tap','node',e=>{
+  if(performance.now()-lastPanEnd < 220) return;   // das war ein Zug, kein Klick
+  const id=e.target.id();
+  if(id===focus){ if(['device','dhcpres','dhcpnet','port','switch','ap'].includes(N.get(id).kind)) showCard(id); return; }
+  go(id);
+});
+cy.on('tap',e=>{ if(e.target===cy) hideCard(); });
+
+/* --- Linsenwechsel: dieselben Knoten wandern an ihren neuen Platz --- */
+document.querySelectorAll('.lens').forEach(b=>{
+  b.onclick=()=>{
+    const nl=b.dataset.lens;
+    if(nl===lens) return;
+    document.querySelectorAll('.lens').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
+    const keep = focus;
+    lens=nl;
+    focus = (par[lens][keep]!==undefined || keep===ROOT[lens]) ? keep : ROOT[lens];
+    if(['device','dhcpres'].includes(N.get(focus).kind) && par[lens][focus]) focus = par[lens][focus];
+    hashSchreiben();
+    apply(true);
+  };
+});
+
+/* --- Schnellzugriff auf die Switches ---------------------------------------
+   Kern zuerst, dann Verteiler, dann Zugang — die Reihenfolge, in der man bei
+   einer Stoerung sucht. Ein Klick wechselt bei Bedarf in die Topologie, denn
+   nur dort hat ein Switch seine Ports als Kinder. */
+const SWQ_RANG={KERN:0,VERTEILER:1,ZUGANG:2};
+const swqListe=document.getElementById('swquick');
+[...SWITCHES].sort((a,b)=>SWQ_RANG[switchRolle(a)]-SWQ_RANG[switchRolle(b)]
+                         || a.label.localeCompare(b.label)).forEach(sw=>{
+  const b=document.createElement('button');
+  b.className='swq'; b.dataset.sw=sw.id; b.dataset.rolle=switchRolle(sw);
+  b.setAttribute('role','listitem');
+  b.title=(N.get(sw.id)||{}).sub||sw.label;
+  const rb=document.createElement('span'); rb.className='rb';
+  const nm=document.createElement('span'); nm.className='nm'; nm.textContent=sw.label;
+  const ip=document.createElement('small'); ip.textContent=sw.ip+(sw.erreichbar===false?' · ohne LLDP':'');
+  nm.append(ip);
+  const rl=document.createElement('span'); rl.className='rl'; rl.textContent=switchRolle(sw);
+  b.append(rb,nm,rl);
+  b.onclick=()=>{
+    if(lens!=='topo'){
+      /* Den Linsenknopf ausloesen statt `lens` direkt zu setzen: so laeuft der
+         Wechsel durch dieselbe Stelle wie ein Klick und bleibt konsistent. */
+      document.querySelector('.lens[data-lens="topo"]').click();
+    }
+    go(sw.id);
+  };
+  swqListe.append(b);
+});
+function swqMarkieren(){
+  /* Nur in der Topologie: in IP-Netz, Access Point und DHCP hat ein Switch
+     keine Kinder, ein Sprung dorthin wuerde die Linse wechseln und verwirren. */
+  document.getElementById('swquick-bereich').hidden = lens!=='topo';
+  /* Auch Ports und Geraete gehoeren zu "ihrem" Switch: steht man auf C3PO
+     Port 12, bleibt C3PO markiert. */
+  let x=focus, sw=null;
+  while(x!==undefined && x!==null){
+    const n=N.get(x); if(n && n.kind==='switch'){ sw=x; break; }
+    x=par.topo[x];
+  }
+  /* Direkt nachschlagen, nicht ueber `swqListe`: `apply` laeuft beim ersten
+     Zeichnen, bevor diese Zeilen erreicht sind — die Konstante waere dann noch
+     nicht initialisiert. */
+  document.getElementById('swquick').querySelectorAll('.swq').forEach(b=>
+    b.setAttribute('aria-current',String(lens==='topo'&&b.dataset.sw===sw)));
+}
+
+document.getElementById('t-up').onclick=()=>{
+  const p=par[lens][focus]; if(p) go(p);
+};
+
+/* --- Detailkarte --- */
+function apiPfad(schluessel){
+  /* Der Slash eines Netzschluessels bleibt Routentrenner; jedes Teil wird
+     einzeln kodiert, damit MACs, Doppelpunkte und Sonderzeichen Daten bleiben. */
+  return String(schluessel).split('/').map(encodeURIComponent).join('/');
+}
+function apOrt(d){
+  if(!d.ap) return 'unbekannt';
+  const a=APS.find(x=>x.id===d.ap), teile=['WLAN',a?a.label:d.ap];
+  if(a&&a.port&&N.has(a.port)) teile.push('an '+nodeLabelFull(a.port));
+  return teile.join(' · ');
+}
+function ketteText(glieder){
+  return glieder.map(g=>{
+    if(g.art==='geraet') return 'Geraet';
+    const n=N.get(g.name), a=APS.find(x=>x.id==='ap:'+g.name);
+    const name=n?n.label:(a?a.label:String(g.name).toUpperCase());
+    const port=g.port ? ' Port '+g.port.replace(/[a-z]+/gi,'') : '';
+    return name+port;
+  }).join(' → ');
+}
+function dhcpText(d){
+  const h=(d&&d.dhcp)||{};
+  const teile=[h.lease&&('Lease '+h.lease),h.reservierung&&('reserviert '+h.reservierung)].filter(Boolean);
+  if(teile.length) return teile.join(' · ');
+  return 'keine — feste Adresse oder unbekannt';
+}
+let cardRows=[], actionZiel=null;
+function setCardRows(rows){
+  cardRows=rows.filter(Boolean);
+  const dl=document.getElementById('card-kv'); dl.textContent='';
+  cardRows.forEach(([k,v,cls])=>{
+    const dt=document.createElement('dt');dt.textContent=k;
+    const dd=document.createElement('dd');if(cls)dd.className=cls;
+    if(v&&typeof v==='object'){
+      dd.textContent=v.main||'';
+      if(v.sub){ const sub=document.createElement('span');sub.className='sub';sub.textContent=v.sub;dd.append(sub); }
+    }else dd.textContent=v;
+    dl.append(dt,dd);
+  });
+}
+function cardZuruecksetzen(){
+  document.getElementById('card-extra').textContent='';
+  document.getElementById('action-out').hidden=true;
+  document.getElementById('action-out').textContent='';
+}
+function cardAbschnitt(titel,text){
+  const box=document.createElement('section');box.className='card-section';
+  const h=document.createElement('h3');h.textContent=titel;box.append(h);
+  if(text){const p=document.createElement('p');p.textContent=text;box.append(p);}
+  document.getElementById('card-extra').append(box);return box;
+}
+function auswirkung(id){
+  const ids=[],gesehen=new Set([id]);
+  (function walk(x){
+    (kids.topo[x]||[]).forEach(c=>{
+      if(gesehen.has(c)) return; gesehen.add(c);
+      const n=N.get(c); if(!n) return;
+      if(['switch','ap','device'].includes(n.kind)) ids.push(c);
+      walk(c);
+    });
+  })(id);
+  return {ids,switches:ids.filter(x=>N.get(x).kind==='switch').length,
+    aps:ids.filter(x=>N.get(x).kind==='ap').length,
+    geraete:ids.filter(x=>N.get(x).kind==='device').length};
+}
+function auswirkungZeigen(id){
+  const a=auswirkung(id); if(!a.ids.length) return;
+  const box=cardAbschnitt('Bei Ausfall betroffen',a.ids.length+' insgesamt · '+a.switches+
+    ' Switches · '+a.aps+' APs · '+a.geraete+' Geräte');
+  const b=document.createElement('button');b.className='inline-act';b.textContent='als Liste';
+  b.onclick=()=>zeigeMehrMit(a.ids,'Bei Ausfall betroffen');box.append(b);
+}
+function cardKette(id,lokal){
+  const ch=document.getElementById('card-chain');ch.textContent='';ch.hidden=false;
+  const b=document.createElement('b');b.textContent='Kette';ch.append(b,document.createTextNode(lokal));
+  return ch;
+}
+function aktionenSetzen(ziel){
+  actionZiel=ziel;
+  const hatIp=!!(ziel&&ziel.ip), hatMac=!!(ziel&&ziel.mac);
+  ['act-ping','act-trace','act-port'].forEach(id=>{
+    const b=document.getElementById(id);b.disabled=!hatIp;
+    b.title=hatIp?'':'Keine IP-Adresse bekannt';
+  });
+  document.getElementById('act-portnr').disabled=!hatIp;
+  document.querySelectorAll('.quick-port').forEach(b=>b.disabled=!hatIp);
+  const scan=document.getElementById('act-scan');
+  scan.hidden=!SCAN_ERLAUBT;scan.disabled=!hatIp&&!scanLauf;
+  const wol=document.getElementById('act-wol');wol.disabled=!hatMac||!hatIp;
+  wol.title=hatMac?'':'Keine MAC-Adresse bekannt';
+  document.getElementById('compare-start').hidden=!(ziel&&ziel.device);
+  document.getElementById('nameKnopf').hidden=!(ziel&&ziel.device);
+  document.getElementById('card-acts').hidden=false;
+}
+function showDhcpNetCard(id){
+  const n=N.get(id),x=n.dhcp;
+  openCard=id;
+  cardZuruecksetzen();
+  document.getElementById('card-title').firstChild.textContent=(x.label||x.cidr)+' · DHCP ';
+  const pools=(x.pools||[]).map(p=>p.von+'–'+p.bis+' · '+p.belegt+'/'+p.groesse+' belegt');
+  const rows=[['Netz',x.cidr],['VLAN',x.vlan===null||x.vlan===undefined?'—':String(x.vlan)],
+    ['Router',x.router||'—'],['Pool',pools.join(' · ')||'kein Pool'],
+    ['Einträge',(x.eintraege||[]).length+'',1],['Ohne Lease',(x.statisch||[]).length+'',1]];
+  (x.funde||[]).forEach((f,i)=>rows.push(['Fund '+(i+1),f.text||f.art,'plain']));
+  setCardRows(rows);
+  const ch=document.getElementById('card-chain');ch.textContent='';ch.hidden=true;
+  document.getElementById('card-acts').hidden=true;
+  document.getElementById('card').hidden=false;
+}
+function showDhcpResCard(id){
+  const n=N.get(id),h=n.dhcp;
+  openCard=id;
+  cardZuruecksetzen();
+  document.getElementById('card-title').firstChild.textContent=n.label+' ';
+  setCardRows([['Name',n.label,'plain'],['MAC',h.mac],['DHCP',h.lease?'Lease '+h.lease:
+    h.reservierung?'reserviert '+h.reservierung:'keine Lease'],['Status','reserviert, nie gesehen','plain']]);
+  const ch=document.getElementById('card-chain');ch.textContent='';ch.hidden=true;
+  document.getElementById('card-acts').hidden=true;
+  document.getElementById('card').hidden=false;
+}
+function showDeviceCard(id){
+  const d=byId.get(id); if(!d) return hideCard();
+  openCard=id;
+  cardZuruecksetzen();
+  const n=N.get(id);
+  document.getElementById('card-title').firstChild.textContent=d.label+' ';
+  const netz=NETBY(d.net);
+  const weitere=weitereNamen(d);
+  const rows=[
+    ['Name',{main:nameMitQuelle(d),sub:weitere.join(' · ')},'plain'],
+    ['Typ',d.typ,'plain'],['Hersteller',d.hersteller,'plain'],
+    ['MAC',d.mac],['Adresse',d.ip],
+    ['DHCP',dhcpText(d)],
+    ['Netz',[netz.label,'VLAN '+VLAN(netz),netz.cidr].filter(Boolean).join(' · ')],
+    ['Ort', d.ap ? apOrt(d) : d.port&&N.has(d.port)
+          ? nodeLabelFull(d.port)+'  ('+N.get(d.port).iface+')' : 'unbekannt'],
+    ['Zustand', d.state==='seen'?'gesehen':'bekannt, aber still'],
+    d.verkehr&&d.verkehr!=='—' ? ['Verkehr',d.verkehr] : null,
+    ['Erstmals',d.erst],['Zuletzt',d.letzt],
+  ].filter(Boolean);
+  setCardRows(rows);
+  const ch=cardKette(id,chainText(id));
+  if(d.typ==='Switch'||d.typ==='Access Point') auswirkungZeigen(d.switch||d.ap_kabel||id);
+  aktionenSetzen({ip:d.ip,mac:d.mac,device:d});
+  document.getElementById('card').hidden=false;
+  fetch('/api/objekt/'+apiPfad(id))
+    .then(r=>r.ok?r.json():Promise.reject())
+    .then(x=>{
+      if(openCard!==id || !x.kette || !x.kette.length) return;
+      ch.textContent='';
+      const kopf=document.createElement('b'); kopf.textContent='Kette';
+      ch.append(kopf,document.createTextNode(ketteText(x.kette)));
+    })
+    .catch(()=>{});                 // Die lokale Karte bleibt voll benutzbar.
+}
+function portZeilen(n){
+  const p=n.raw||{};
+  return [['Switch',(N.get(n.sw)||{}).label||n.sw,'plain'],['Port',n.iface],
+    ['Link',p.link||'nicht gemessen','plain'],['Tempo',tempoLang(p.speed)],
+    ['Duplex',p.duplex||'nicht gemessen','plain'],['VLANs',vlanText(p.vlans),'plain'],
+    ['PVID',messwert(p.pvid)],['STP',p.stp||'nicht gemessen','plain'],
+    ['PoE',p.poe==='liefert'?'liefert '+messwert(p.poe_w,' W'):(p.poe||'nicht gemessen'),'plain'],
+    ['Fehler 1 h',messwert(p.fehler_1h)],['Fehler 24 h',messwert(p.fehler_24h)],
+    ['Verworfen 24 h',messwert(p.verworfen_24h)],['Linkwechsel 24 h',messwert(p.wechsel_24h)],
+    n.aktivUnbekannt?['Hinweis','aktiv, kein Gerät bekannt','plain']:null].filter(Boolean);
+}
+function zeitText(x){
+  const ab=x.ab||'unbekannt',bis=x.bis||'seit';return x.bis?ab+' – '+bis:'seit '+ab;
+}
+async function porthistorieLaden(id,n){
+  const p=n.raw||{}, teile=p.bundle>1&&(p.mitglieder||[]).length
+    ? p.mitglieder.map(m=>n.sw+':'+m.p) : [id];
+  try{
+    const antworten=await Promise.all(teile.map(k=>fetch('/api/objekt/'+apiPfad(k)).then(r=>r.ok?r.json():{})));
+    if(openCard!==id) return;
+    const eindeutig=new Map();antworten.flatMap(x=>x.hing_hier||[]).forEach(x=>
+      eindeutig.set([x.objekt,x.ab,x.bis].join('|'),x));
+    const eintraege=[...eindeutig.values()].sort((a,b)=>String(b.ab||'').localeCompare(String(a.ab||'')));
+    const box=cardAbschnitt('Wer hing hier',eintraege.length?'': 'Keine Historie verfügbar.');
+    if(eintraege.length){
+      const ul=document.createElement('ul');eintraege.forEach(x=>{
+        const li=document.createElement('li'),d=byId.get(x.objekt);
+        li.textContent=(d?d.label:x.objekt)+' · '+zeitText(x);ul.append(li);
+      });box.append(ul);
+    }
+  }catch(_e){ if(openCard===id) cardAbschnitt('Wer hing hier','Historie konnte nicht geladen werden.'); }
+}
+function showPortCard(id){
+  const n=N.get(id);openCard=id;cardZuruecksetzen();
+  document.getElementById('card-title').firstChild.textContent=nodeLabelFull(id)+' ';
+  setCardRows(portZeilen(n));cardKette(id,chainText(id));auswirkungZeigen(id);
+  aktionenSetzen(null);document.getElementById('card').hidden=false;porthistorieLaden(id,n);
+}
+function showSwitchCard(id){
+  const n=N.get(id),s=SWITCHES.find(x=>x.id===id)||{};openCard=id;cardZuruecksetzen();
+  document.getElementById('card-title').firstChild.textContent=n.label+' ';
+  setCardRows([['Rolle',n.rolle,'plain'],['Modell',s.modell,'plain'],['Adresse',s.ip],
+    ['Ports',messwert(s.ports)],s.poe_budget_w!==null&&s.poe_budget_w!==undefined
+      ?['PoE','PoE '+messwert(s.poe_w,'')+'/'+s.poe_budget_w+' W']:null]);
+  cardKette(id,chainText(id));auswirkungZeigen(id);
+  const dev=devices.find(d=>d.switch===id);aktionenSetzen({ip:s.ip||dev&&dev.ip,mac:dev&&dev.mac,device:null});
+  document.getElementById('card').hidden=false;
+}
+function showApCard(id){
+  const a=APS.find(x=>x.id===id)||{},n=N.get(id),c=devices.filter(d=>d.ap===id);openCard=id;cardZuruecksetzen();
+  document.getElementById('card-title').firstChild.textContent=(n&&n.label||a.label||id)+' ';
+  setCardRows([['Adresse',a.ip||'—'],['Kabel',a.port&&N.has(a.port)?nodeLabelFull(a.port):a.port||'unbekannt'],
+    ['Clients',String(c.length)]]);cardKette(id,chainText(id));auswirkungZeigen(id);
+  const dev=devices.find(d=>(a.port&&d.ap_kabel===a.port)
+    ||(d.typ==='Access Point'&&d.ip&&d.ip===a.ip));
+  aktionenSetzen({ip:a.ip||dev&&dev.ip,mac:dev&&dev.mac,device:null});document.getElementById('card').hidden=false;
+}
+function showCard(id){
+  const art=N.get(id)&&N.get(id).kind;
+  if(art==='dhcpnet') return showDhcpNetCard(id);
+  if(art==='dhcpres') return showDhcpResCard(id);
+  if(art==='port') return showPortCard(id);
+  if(art==='switch') return showSwitchCard(id);
+  if(art==='ap') return showApCard(id);
+  if(art==='device') return showDeviceCard(id);
+  hideCard();
+}
+function hideCard(){document.getElementById('card').hidden=true;openCard=null;}
+document.getElementById('x-card').onclick=hideCard;
+
+/* Drei Wege, in dieser Reihenfolge: die Zwischenablage-Schnittstelle, der alte
+   execCommand-Weg (wenn die Schnittstelle fehlt ODER ablehnt — z.B. ohne Fokus
+   oder hinter einer Richtlinie), und zuletzt ein Fenster mit markiertem Text
+   zum Selbstkopieren. Ein Export, der still scheitert, ist schlimmer als keiner. */
+function kopierenAlt(text){
+  const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';
+  document.body.append(ta);ta.focus();ta.select();
+  let ok=false;try{ok=document.execCommand('copy');}catch(_e){ok=false;}
+  ta.remove();return ok;
+}
+function kopierenZeigen(text){
+  let dlg=document.getElementById('kopie-dialog');
+  if(!dlg){
+    dlg=document.createElement('dialog');dlg.id='kopie-dialog';
+    dlg.style.cssText='background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:12px;width:min(640px,92vw)';
+    const hinweis=document.createElement('div');hinweis.style.cssText='font-size:11px;margin-bottom:8px;color:var(--muted)';
+    hinweis.textContent='Zwischenablage nicht erreichbar — Text ist markiert, bitte mit Strg+C kopieren.';
+    const ta=document.createElement('textarea');ta.style.cssText='width:100%;height:240px;font-family:var(--mono);font-size:11px;background:var(--panel-2);color:var(--text)';
+    const zu=document.createElement('button');zu.textContent='schließen';zu.className='act';zu.onclick=()=>dlg.close();
+    dlg.append(hinweis,ta,zu);document.body.append(dlg);
+  }
+  const ta=dlg.querySelector('textarea');ta.value=text;dlg.showModal();ta.focus();ta.select();
+}
+async function textKopieren(text,knopf){
+  try{
+    let ok=false;
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      try{await navigator.clipboard.writeText(text);ok=true;}catch(_e){ok=false;}
+    }
+    if(!ok) ok=kopierenAlt(text);
+    if(!ok){kopierenZeigen(text);return false;}
+    if(knopf){
+      const alt=knopf.textContent;knopf.textContent='kopiert';knopf.classList.add('copy-note');
+      setTimeout(()=>{knopf.textContent=alt;knopf.classList.remove('copy-note');},1600);
+    }
+    return true;
+  }catch(_e){
+    if(knopf){const alt=knopf.textContent;knopf.textContent='Kopieren fehlgeschlagen';setTimeout(()=>knopf.textContent=alt,1900);}
+    return false;
+  }
+}
+function md(v){
+  if(v&&typeof v==='object') v=[v.main,v.sub].filter(Boolean).join(' · ');
+  return String(v===null||v===undefined?'':v).replace(/\|/g,'\\|').replace(/\r?\n/g,'<br>');
+}
+function mdTabelle(kopf,zeilen){
+  return '| '+kopf.map(md).join(' | ')+' |\n| '+kopf.map(()=>'---').join(' | ')+' |\n'
+    +zeilen.map(r=>'| '+r.map(md).join(' | ')+' |').join('\n');
+}
+function cardMarkdown(id){
+  const n=N.get(id);
+  if(n&&n.kind==='switch'){
+    const zeilen=(PORTS[id]||[]).map(p=>{
+      const pid=id+':'+p.p, ds=N.has(pid)?devicesUnder(pid,20):[];
+      return [p.p,p.link||'nicht gemessen',tempoLang(p.speed),vlanText(p.vlans),
+        p.poe==='liefert'?'liefert '+messwert(p.poe_w,' W'):(p.poe||'nicht gemessen'),
+        messwert(p.fehler_24h),ds.map(d=>d.label).join(', ')||'—'];
+    });
+    return mdTabelle(['Port','Link','Speed','VLANs','PoE','Fehler 24h','Geräte'],zeilen);
+  }
+  return mdTabelle(['Feld','Wert'],cardRows.map(([k,v])=>[k,v]));
+}
+document.getElementById('card-export').onclick=async e=>{
+  if(!openCard) return;const alt=e.currentTarget.textContent;
+  if(await textKopieren(cardMarkdown(openCard))){e.currentTarget.textContent='als Markdown kopiert';
+    setTimeout(()=>e.currentTarget.textContent=alt,1600);}
+};
+
+function aktionsFehler(detail,status){
+  if(Array.isArray(detail)) return detail.map(x=>x.msg||String(x)).join('\n');
+  if(detail&&typeof detail==='object') return detail.message||JSON.stringify(detail);
+  return detail||('Anfrage fehlgeschlagen (HTTP '+status+').');
+}
+async function aktionAusfuehren(knopf,pfad,daten){
+  const alt=knopf.textContent,aus=document.getElementById('action-out');
+  knopf.disabled=true;knopf.textContent='läuft …';aus.hidden=false;aus.textContent='wird ausgeführt …';
+  try{
+    const r=await fetch('/api/aktion/'+pfad,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(daten)});
+    const x=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(aktionsFehler(x.detail,r.status));
+    aus.textContent='';
+    if(x.kurz){const kurz=document.createElement('span');kurz.className='kurz';kurz.textContent=x.kurz;aus.append(kurz);}
+    aus.append(document.createTextNode(x.ausgabe||'Aktion abgeschlossen.'+(x.dauer_ms?' · '+x.dauer_ms+' ms':'')));
+  }catch(e){aus.textContent='Aktion nicht möglich: '+e.message;}
+  finally{knopf.textContent=alt;aktionenSetzen(actionZiel);}
+}
+document.getElementById('act-ping').onclick=e=>aktionAusfuehren(e.currentTarget,'ping',{ziel:actionZiel.ip});
+document.getElementById('act-trace').onclick=e=>aktionAusfuehren(e.currentTarget,'traceroute',{ziel:actionZiel.ip});
+document.getElementById('act-port').onclick=e=>{
+  const port=Number(document.getElementById('act-portnr').value);
+  if(!Number.isInteger(port)||port<1||port>65535){document.getElementById('action-out').hidden=false;
+    document.getElementById('action-out').textContent='Bitte einen Port von 1 bis 65535 eingeben.';return;}
+  aktionAusfuehren(e.currentTarget,'port',{ziel:actionZiel.ip,port});
+};
+document.getElementById('act-wol').onclick=e=>aktionAusfuehren(e.currentTarget,'wol',
+  {mac:actionZiel.mac,...(actionZiel.ip?{ip:actionZiel.ip}:{})});
+/* --- Portscan ----------------------------------------------------------------
+   Nur sichtbar, wenn der Dienst ihn freigibt (DAEDALUS_SCAN_FREIGABE): ohne
+   Ausnahme an der Sophos wuerde der scannende Nomad-Knoten gesperrt. Der Scan
+   laeuft im Dienst weiter; die Karte fragt jede Sekunde nach und kann abbrechen. */
+let SCAN_ERLAUBT=false, scanLauf=null;
+fetch('/api/aktion/faehigkeiten').then(r=>r.ok?r.json():{}).then(x=>{
+  SCAN_ERLAUBT=!!(x&&x.scan);
+  if(typeof actionZiel!=='undefined'&&actionZiel) aktionenSetzen(actionZiel);
+}).catch(()=>{});
+function scanZeigen(st){
+  const aus=document.getElementById('action-out');aus.hidden=false;aus.textContent='';
+  const kurz=document.createElement('span');kurz.className='kurz';
+  const text={laeuft:'Scan läuft · '+st.fortschritt+' % · '+st.sekunden+' s',
+    fertig:'Scan fertig · '+st.ports.length+' offene Ports · '+st.sekunden+' s',
+    abgebrochen:'Scan abgebrochen',fehler:'Scan fehlgeschlagen'}[st.zustand]||st.zustand;
+  kurz.textContent=text;aus.append(kurz);
+  if(st.ports.length) aus.append(document.createTextNode(
+    st.ports.map(p=>p.port+'/'+p.protokoll+(p.dienst?'  '+p.dienst:'')).join('\n')));
+  else if(st.zustand==='fertig') aus.append(document.createTextNode('keine offenen Ports unter den 100 häufigsten'));
+  if(st.meldung) aus.append(document.createTextNode('\n'+st.meldung));
+}
+document.getElementById('act-scan').onclick=async e=>{
+  const knopf=e.currentTarget;
+  if(scanLauf){                                   // zweiter Klick = abbrechen
+    await fetch('/api/aktion/scan/'+scanLauf,{method:'DELETE'}).catch(()=>{});
+    return;
+  }
+  try{
+    const r=await fetch('/api/aktion/scan',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ziel:actionZiel.ip})});
+    const x=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(aktionsFehler(x.detail,r.status));
+    scanLauf=x.id;knopf.textContent='Scan abbrechen';scanZeigen(x);
+    while(scanLauf){
+      await new Promise(w=>setTimeout(w,1000));
+      const st=await fetch('/api/aktion/scan/'+scanLauf).then(q=>q.json());
+      scanZeigen(st);
+      if(st.zustand!=='laeuft') scanLauf=null;
+    }
+  }catch(err){
+    const aus=document.getElementById('action-out');aus.hidden=false;
+    aus.textContent='Scan nicht möglich: '+err.message;scanLauf=null;
+  }finally{
+    if(!scanLauf) knopf.textContent='Portscan';
+  }
+};
+document.querySelectorAll('.quick-port').forEach(b=>b.onclick=()=>{
+  document.getElementById('act-portnr').value=b.dataset.port;
+});
+
+let vergleichA=null;
+function vergleichAbbrechen(){
+  vergleichA=null;document.getElementById('compare-hint').hidden=true;
+}
+function vergleichOrt(d){
+  return d.ap?apOrt(d):d.port&&N.has(d.port)?nodeLabelFull(d.port):'unbekannt';
+}
+function anschlussPort(d){
+  if(d.port&&N.has(d.port)) return N.get(d.port);
+  if(d.ap){const a=APS.find(x=>x.id===d.ap);if(a&&a.port&&N.has(a.port)) return N.get(a.port);}
+  return null;
+}
+function vergleichWerte(d,api){
+  const net=NETBY(d.net),p=anschlussPort(d),r=p&&p.raw||{};
+  return [
+    ['Name',d.label],['IP(s)',(d.ips||[d.ip]).filter(Boolean).join(', ')||'—'],
+    ['Netz / VLAN',[net.label,'VLAN '+VLAN(net),net.cidr].filter(Boolean).join(' · ')],
+    ['WLAN-VLAN / ssid-feef',d.ap?[d.vlan&&('VLAN '+d.vlan),d.essid].filter(Boolean).join(' · ')||'—':'—'],
+    ['Ort',vergleichOrt(d)],['Kette',api&&api.kette&&api.kette.length?ketteText(api.kette):chainText(d.id)],
+    ['Port-VLANs / PVID',p?vlanText(r.vlans)+' · PVID '+messwert(r.pvid):'—'],
+    ['Link / Speed / Fehler',p?[r.link||'nicht gemessen',tempoLang(r.speed),'Fehler '+messwert(r.fehler_24h)+'/24 h'].join(' · '):'—'],
+    ['DHCP',dhcpText(d)],['Zustand',d.state==='seen'?'gesehen':'bekannt, aber still'],
+    ['Hersteller',d.hersteller||'—'],
+  ];
+}
+async function vergleichOeffnen(aid,bid){
+  const a=byId.get(aid),b=byId.get(bid);if(!a||!b) return;
+  const daten=await Promise.all([aid,bid].map(id=>fetch('/api/objekt/'+apiPfad(id)).then(r=>r.ok?r.json():{}).catch(()=>({}))));
+  const av=vergleichWerte(a,daten[0]),bv=vergleichWerte(b,daten[1]);
+  const table=document.createElement('table');table.className='compare-table';
+  const thead=document.createElement('thead'),hr=document.createElement('tr');
+  ['',a.label,b.label].forEach(x=>{const th=document.createElement('th');th.textContent=x;hr.append(th);});thead.append(hr);table.append(thead);
+  const tbody=document.createElement('tbody');av.forEach((r,i)=>{
+    const tr=document.createElement('tr');if(String(r[1])!==String(bv[i][1]))tr.className='diff';
+    [r[0],r[1],bv[i][1]].forEach(x=>{const td=document.createElement('td');td.textContent=x;tr.append(td);});tbody.append(tr);
+  });table.append(tbody);const body=document.getElementById('compare-body');body.textContent='';body.append(table);
+  document.getElementById('compare').hidden=false;vergleichAbbrechen();hashSchreiben();
+}
+document.getElementById('compare-start').onclick=()=>{
+  const d=actionZiel&&actionZiel.device;if(!d) return;
+  if(!vergleichA){
+    vergleichA=d.id;const h=document.getElementById('compare-hint');h.textContent='A: '+d.label+' gemerkt — zweites Gerät wählen';
+    const b=document.createElement('button');b.textContent='abbrechen';b.onclick=vergleichAbbrechen;h.append(b);h.hidden=false;
+    hideCard();return;
+  }
+  if(vergleichA===d.id) return;
+  hideCard();
+  vergleichOeffnen(vergleichA,d.id);
+};
+document.getElementById('x-compare').onclick=()=>{document.getElementById('compare').hidden=true;hashSchreiben();};
+
+/* --- Das kleine Fenster beim Darüberfahren ------------------------------
+   In der Karte steht nur die Kennzahl. Wer mehr will, fährt darüber — so
+   bleibt die Leinwand ruhig und die Auskunft trotzdem eine Handbewegung weit. */
+const tip=document.getElementById('tip');
+function tipRows(id){
+  const n=N.get(id);
+  switch(n.kind){
+    case 'device': {
+      const d=byId.get(id), x=NETBY(d.net);
+      const r=[['Name',nameMitQuelle(d),1],['Typ',d.typ,1],['Hersteller',d.hersteller,1],['MAC',d.mac],
+        ['Adresse',d.ip],['Netz',x.label+' · VLAN '+VLAN(x)],
+        ['DHCP',dhcpText(d),1],
+        ['Ort',d.ap?apOrt(d):(d.port&&N.has(d.port)?nodeLabelFull(d.port):'unbekannt'),1],
+        ['Zustand',d.state==='seen'?'gesehen':'bekannt, aber still',1]];
+      if(d.zufall) r.push(['Hinweis','wechselnde MAC',1]);
+      if(d.verkehr&&d.verkehr!=='—') r.push(['Verkehr',d.verkehr,1]);
+      r.push(['Zuletzt',d.letzt,1]);
+      return r;
+    }
+    case 'port': {
+      const ds=devicesUnder(id);
+      const p=n.raw||{};
+      const r=[['Betriebsart', n.aktivUnbekannt?'aktiv, kein Gerät bekannt':
+                  n.belegt ? (n.uplink?'Trunk':'Access') : 'nicht belegt',1],
+               ['Link',p.link||'nicht gemessen',1],
+               ['Tempo',tempoLang(p.speed),1],['Duplex',p.duplex||'nicht gemessen',1],
+               ['VLANs',vlanText(p.vlans),1],['PVID',messwert(p.pvid)],
+               ['STP',p.stp||'nicht gemessen',1],
+               ['PoE',p.poe==='liefert'?'liefert '+messwert(p.poe_w,' W'):(p.poe||'nicht gemessen'),1],
+               ['Fehler 1 h / 24 h',messwert(p.fehler_1h)+' / '+messwert(p.fehler_24h)],
+               ['Verworfen 24 h',messwert(p.verworfen_24h)],
+               ['Linkwechsel 24 h',messwert(p.wechsel_24h)],
+               ['Medium', n.fiber?'Glasfaser':'Kupfer',1],
+               ['Am Gerät', n.iface]];
+      if(n.bundle>1) r.push(['Bündel', n.bundle+' Leitungen',1]);
+      if(n.bundle>1){
+        const ziel=portZielName(n)||'Gegenstelle', gesamt=tempoLang(n.speed)+' gesamt';
+        r.unshift(['LAG','Link-Aggregation (per LLDP erkannt) · '
+          +String(n.iface).split('+').join(' + ')+' · '+gesamt+' · zu '+ziel,1]);
+      }
+      (p.mitglieder||[]).forEach(m=>r.push(['Mitglied '+m.p,
+        [m.link||'Link ?',tempoLang(m.speed),m.duplex||'Duplex ?',vlanText(m.vlans),
+         'Fehler '+messwert(m.fehler_24h)+'/24 h','Wechsel '+messwert(m.wechsel_24h)+'/24 h'].join(' · '),1]));
+      if(n.quer){
+        const q=N.get(n.quer),name=q?q.label:String(n.quer).toUpperCase();
+        r.push(['Querverbindung','zu '+name+' (redundanter Weg, nicht gezeichnet)',1]);
+      }
+      if(ds.length)  r.push(['Daran', ds.slice(0,4).map(d=>d.label).join(', ')
+                            +(ds.length>4?' …':''),1]);
+      return r;
+    }
+    case 'switch': {
+      const s=SWITCHES.find(x=>x.id===id);
+      const ps=PORTS[id]||[];
+      const versorgung=[n.speist.switches.length&&('speist '+n.speist.switches.join(', ')),
+                        n.speist.aps&&n.speist.aps+' Access Points'].filter(Boolean).join(' · ')||'keine Unterverteilung';
+      return [['Rolle',n.rolle==='KERN'?'Kern-Switch':n.rolle==='VERTEILER'?'Verteiler-Switch':'Zugangs-Switch',1],
+        ['Versorgung',versorgung,1],['Modell',s.modell,1],['Adresse',s.ip],['Ports',s.ports+' gesamt',1],
+        s.poe_budget_w!==null&&s.poe_budget_w!==undefined?['PoE',messwert(s.poe_w,'')+'/'+s.poe_budget_w+' W',1]:null,
+        ['Hier',ps.length+' dargestellt',1],
+        ['Belegt',ps.filter(x=>x.to!==null||x.link==='up').length+' davon',1]].filter(Boolean);
+    }
+    case 'fw':  return [['Modell','Sophos XGS',1],['Adresse','172.16.1.1'],
+                        ['Zweites Bein','172.16.0.1'],['Netze',NETS.length+' VLAN',1]];
+    case 'ap':  { const a=APS.find(x=>x.id===id);
+                  const c=devices.filter(d=>d.ap===id);
+                  return [['Adresse',a.ip],['Clients',c.length+'',1],
+                          ['Darunter',c.slice(0,3).map(d=>d.label).join(', ')||'—',1]]; }
+    case 'root':return [['Access Points',APS.length+'',1],
+                        ['Clients',devices.filter(d=>d.ap).length+'',1]];
+    case 'dhcproot':return [['Betrieb',n.sub,1],['Pool',DHCP_POOL.belegt+'/'+DHCP_POOL.groesse+' belegt'],
+                            ['Funde',DHCP_FUNDE+'',1]];
+    case 'dhcpnet': {
+      const x=n.dhcp,r=[['Bereich',x.cidr],['VLAN',x.vlan===null||x.vlan===undefined?'—':String(x.vlan)],
+        ['Router',x.router||'—'],['Pool',n.belegt+'/'+n.groesse+' belegt']];
+      (x.funde||[]).forEach((f,i)=>r.push(['Fund '+(i+1),f.text||f.art,1]));
+      return r;
+    }
+    case 'dhcpgroup':return [['Einträge',(kids.dhcp[id]||[]).length+'',1]];
+    case 'dhcpres':return [['MAC',n.dhcp.mac],['Adresse',n.dhcp.reservierung||n.dhcp.lease||n.dhcp.ip||'—'],
+                           ['Status','reserviert, nie gesehen',1]];
+    case 'net': { const x=NETBY(id);
+                  const c=devices.filter(d=>d.net===id).length;
+                  const r=[['Bereich',x.cidr],['VLAN',VLAN(x)],['Geräte',c+'',1]];
+                  if(x.frei!==null) r.push(['Frei',x.frei+' Adressen',1]);
+                  return r; }
+    case 'unknown':
+      return [['Was','vermutlich ein nicht verwalteter Verteiler',1],
+              ['Grund','vier MAC-Adressen an einem Zugangsport',1],
+              ['Achtung','die Portzuordnung dahinter ist nicht messbar',1]];
+    default: return [];
+  }
+}
+function showTip(id){
+  const n=N.get(id), el=cy.$id(id);
+  if(!el.length||el.style('display')==='none') return hideTip();
+  let rows=tipRows(id); if(!rows.length) return hideTip();
+  const pf=PFLEGE[id];
+  if(pf && (pf.dose||pf.raum||pf.notiz)){
+    const zus=[];
+    if(pf.dose)  zus.push(['Wanddose', pf.dose]);
+    if(pf.raum)  zus.push(['Raum', pf.raum, 1]);
+    if(pf.notiz) zus.push(['Notiz', pf.notiz, 1]);
+    rows=rows.concat(zus);
+  }
+  const ae=CHANGEMAP.get(id);
+  const quelle=ae&&byId.has(ae.quelle)?byId.get(ae.quelle).label:(ae&&ae.quelle);
+  if(ae) rows=[['Änderung', MARKWORT[ae.typ]+' · '+ae.wann, 1],
+               ['Was', ae.quelle===id ? ae.was : quelle+': '+ae.was, 1]].concat(rows);
+  if(FUNDMAP.has(id)) rows=[['Fund','Dieser Punkt ist von mindestens einem Fund betroffen',1]].concat(rows);
+  tip.textContent='';
+  const k=document.createElement('div'); k.className='t-k';
+  k.textContent=n.kind==='switch'?(n.rolle==='KERN'?'Kern-Switch':
+    n.rolle==='VERTEILER'?'Verteiler-Switch':'Zugangs-Switch'):(KINDWORT[n.kind]||n.kind);
+  const nm=document.createElement('div'); nm.className='t-n';
+  nm.textContent = n.kind==='net' ? n.kurz : nodeLabelFull(id);
+  const dl=document.createElement('dl');
+  rows.forEach(([a,b,w])=>{
+    const dt=document.createElement('dt'); dt.textContent=a;
+    const dd=document.createElement('dd'); dd.textContent=b; if(w) dd.className='w';
+    dl.append(dt,dd);
+  });
+  tip.append(k,nm,dl);
+  tip.hidden=false;
+  /* neben den Knoten legen und am Rand der Bühne abfangen */
+  const pos=el.renderedPosition(), off=cyEl.offsetTop;
+  const stage=cyEl.parentElement.getBoundingClientRect();
+  const w=tip.offsetWidth, h=tip.offsetHeight;
+  let x=pos.x + el.renderedWidth()/2 + 14;
+  let y=pos.y + off - h/2;
+  if(x+w > stage.width-12) x = pos.x - el.renderedWidth()/2 - w - 14;
+  tip.style.left=Math.max(12,Math.min(x, stage.width-w-12))+'px';
+  tip.style.top =Math.max(56,Math.min(y, stage.height-h-12))+'px';
+}
+function hideTip(){ tip.hidden=true; }
+
+/* --- Scheinwerfer: der Rest der Leinwand tritt in den Schatten --- */
+const spot=document.getElementById('spot'), cyEl=document.getElementById('cy');
+let spotRAF=0, spotUntil=0;
+function drawSpot(){
+  spotRAF=0;
+  const n=cy.$id(focus); if(!n.length) return;
+  const p=n.renderedPosition(), off=cyEl.offsetTop;
+  const r=Math.max(105, n.renderedWidth()*1.35);
+  spot.style.background=
+    'radial-gradient(circle at '+Math.round(p.x)+'px '+Math.round(p.y+off)+'px,'+
+    ' rgba(5,6,10,0) '+Math.round(r)+'px,'+
+    ' rgba(5,6,10,.34) '+Math.round(r*2.6)+'px,'+
+    ' rgba(5,6,10,.68) '+Math.round(r*5.2)+'px)';
+  if(performance.now()<spotUntil) queueSpot();
+}
+function queueSpot(){ if(!spotRAF) spotRAF=requestAnimationFrame(drawSpot); }
+function runSpot(d){ spotUntil=performance.now()+d+120; queueSpot(); }
+cy.on('viewport',queueSpot);
+
+/* Sobald von Hand gezogen oder gezoomt wird, blendet der Scheinwerfer aus -
+   sonst schaut man beim Herumfahren in die eigene Abdunklung. Der naechste
+   Schritt in die Tiefe holt ihn zurueck. */
+function freiBewegen(){ spot.classList.add('frei'); }
+/* Umschalt+Rad faehrt seitwaerts statt zu zoomen — bei einer Reihe, die mehrere
+   Bildschirme lang ist, ist das der schnellste Weg entlang.
+   Nicht ueber `preventDefault` geloest: cytoscape faengt das Rad selbst ab, und
+   sich mit ihm um dasselbe Ereignis zu streiten hat das normale Zoomen gekostet.
+   Stattdessen wird sein Zoomen ausgeschaltet, solange Umschalt gedrueckt ist. */
+cyEl.addEventListener('wheel',e=>{
+  freiBewegen();
+  if(e.shiftKey){ hideTip(); cy.panBy({x:-(e.deltaY||e.deltaX)*1.6, y:0}); }
+},{passive:true});
+addEventListener('keydown',e=>{ if(e.key==='Shift') cy.userZoomingEnabled(false); });
+addEventListener('keyup',  e=>{ if(e.key==='Shift') cy.userZoomingEnabled(true);  });
+addEventListener('blur',   ()=>{ cy.userZoomingEnabled(true); });
+cyEl.addEventListener('mousedown',freiBewegen);
+cyEl.addEventListener('touchstart',freiBewegen,{passive:true});
+
+/* Zug auf einer Karte verschiebt die Leinwand. Die Verschiebung wird aus den
+   Bildschirmkoordinaten des Ausgangsereignisses gerechnet, nicht aus denen der
+   Leinwand \u2014 sonst verschoebe man gegen die eigene Verschiebung. */
+let nodePan=null, lastPanEnd=0;
+cy.on('mousedown','node',evt=>{
+  const oe=evt.originalEvent; if(!oe||oe.button) return;
+  nodePan={x:oe.clientX,y:oe.clientY,pan:{...cy.pan()},moved:false};
+});
+function nodePanMove(oe){
+  if(!nodePan) return;
+  const dx=oe.clientX-nodePan.x, dy=oe.clientY-nodePan.y;
+  if(!nodePan.moved && Math.abs(dx)+Math.abs(dy)<4) return;
+  nodePan.moved=true; freiBewegen(); hideTip();
+  cy.pan({x:nodePan.pan.x+dx, y:nodePan.pan.y+dy});
+}
+function nodePanEnd(){
+  if(nodePan&&nodePan.moved) lastPanEnd=performance.now();
+  nodePan=null;
+}
+addEventListener('mousemove',e=>nodePanMove(e));
+addEventListener('mouseup',nodePanEnd);
+addEventListener('blur',nodePanEnd);
+
+/* Zurueckgenommene Knoten geben ihren Namen preis, wenn man sie anfaehrt */
+/* Direkt setzen statt animieren: eine zweite Animation auf demselben Knoten
+   geraet der Hauptbewegung in die Quere, und auf einem inzwischen verborgenen
+   Knoten laeuft sie ins Leere. */
+cy.on('mouseover','node',e=>{
+  const n=e.target;
+  if(n.style('display')==='none') return;
+  n.style('text-opacity',1);
+  showTip(n.id());
+});
+cy.on('mouseout','node',e=>{
+  const n=e.target;
+  hideTip();
+  if(n.style('display')==='none') return;
+  const t=plan().P.get(n.id());
+  const d=byId.get(n.id());
+  if(t) n.style('text-opacity',ROLE[t.role].text*(d&&!nameVorhanden(d) ? .62 : 1));
+});
+cy.on('tap pan zoom',hideTip);
+
+/* --- Suche -----------------------------------------------------------------
+   Gesucht wird in allem, was auf der Leinwand vorkommt — aber je Art nur in
+   den Feldern, die es dort überhaupt gibt: ein Port hat keinen Hersteller,
+   ein Netz keine MAC. Deshalb ein Verzeichnis mit benannten Feldern statt
+   einer Textwurst, auf der jeder Filter gleich schlecht passt. */
+const KINDRANG={device:0,dhcpres:1,port:2,switch:3,net:4,dhcpnet:5,ap:6,
+                dhcpgroup:7,fw:8,root:9,dhcproot:10,unknown:11};
+const MEHRZAHL={device:'Geräte',port:'Ports',switch:'Switches',net:'IP-Netze',
+  ap:'Access Points',fw:'Firewall',root:'WLAN',unknown:'Vermutet',
+  dhcpres:'Nicht gesehene DHCP-Einträge',dhcpnet:'DHCP-Netze',dhcpgroup:'DHCP-Gruppen',
+  dhcproot:'DHCP'};
+const IDX=(()=>{
+  const out=[];
+  const add=(id,kind,rechts,f)=>out.push({id,kind,rechts,f});
+
+  devices.forEach(d=>{
+    const pn=d.port&&N.has(d.port)?N.get(d.port):null;
+    add(d.id,'device',d.ip,{
+      name:namenText(d), ip:(d.ips||[d.ip]).join(' '), mac:d.mac,
+      hersteller:d.hersteller, typ:d.typ, essid:d.essid||'',
+      netz:NETBY(d.net).label, vlan:VLAN(NETBY(d.net))==='—'?'':VLAN(NETBY(d.net)),
+      switch: pn&&pn.sw ? N.get(pn.sw).label : '',
+      port:   pn ? portLabel(pn)+' '+pn.iface+' '+pn.num : '',
+      ap:     d.ap&&N.has(d.ap) ? N.get(d.ap).label : '',
+      zustand:d.state==='seen'?'gesehen':'still bekannt',
+      wort:   (/^unbenannt/i.test(d.label)?'unbenannt ':'')
+             +(d.zufall?'wechselnde zufalls mac ':''),
+    });
+  });
+
+  SWITCHES.forEach(s=>add(s.id,'switch',s.ip,{
+    name:s.label, ip:s.ip, typ:'switch '+s.modell, hersteller:'Cisco',
+    modell:s.modell, switch:s.label,
+  }));
+
+  SWITCHES.forEach(s=>(PORTS[s.id]||[]).forEach(pp=>{
+    const pid=s.id+':'+pp.p; if(!N.has(pid)||par.topo[pid]===undefined) return;
+    const n=N.get(pid), ds=devicesUnder(pid);
+    const vs=VLANS(ds);
+    add(pid,'port', N.get(s.id).label+' · '+n.iface, {
+      name:portLabel(n)+' '+n.iface, port:portLabel(n)+' '+n.iface+' '+n.num,
+      switch:s.label, typ: n.fiber?'fiber glas port':'kupfer port',
+      vlan: n.uplink?'alle':vs.join(' '),
+      netz: [...new Set(ds.map(d=>NETBY(d.net).label))].join(' '),
+      zustand: n.belegt ? (n.uplink?'trunk belegt':'access belegt') : 'frei',
+      wort: (n.belegt?'':'frei ')+(n.uplink?'trunk ':'access ')
+           +(ds.length>1?'sammelport ':''),
+    });
+  }));
+
+  NETS.forEach(x=>add(x.id,'net',x.cidr,{
+    name:x.label, netz:x.label, ip:x.cidr, vlan:VLAN(x)==='—'?'':VLAN(x),
+    typ:'netz vlan subnetz',
+  }));
+
+  APS.forEach(a=>{
+    const c=devices.filter(d=>d.ap===a.id).length;
+    add(a.id,'ap',a.ip,{name:a.label, ip:a.ip, ap:a.label, typ:'ap accesspoint wlan',
+                        wort:c+' clients'});
+  });
+
+  DHCP.forEach(x=>add(x.id,'dhcpnet',x.cidr,{name:x.label,netz:x.label,ip:x.cidr,
+    vlan:x.vlan===null||x.vlan===undefined?'':String(x.vlan),typ:'dhcp netz kea'}));
+  for(const [id,n] of N) if(n.kind==='dhcpres') add(id,'dhcpres',
+    n.dhcp.reservierung||n.dhcp.lease||n.dhcp.ip||'',{
+      name:n.label,mac:n.dhcp.mac,ip:n.dhcp.reservierung||n.dhcp.lease||n.dhcp.ip||'',
+      netz:(N.get(n.dhcp.netz)||{}).label||'',typ:'dhcp reservierung nie gesehen',
+      zustand:'nie gesehen',wort:'unbekannt reserviert',
+    });
+
+  add('sophos','fw','172.16.1.1',{name:'YODA', ip:'172.16.1.1 172.16.0.1',
+      typ:'firewall sophos gateway', hersteller:'Sophos'});
+  /* Aenderungen sind ein Filter wie jeder andere. */
+  out.forEach(e=>{
+    const ae=CHANGEMAP.get(e.id);
+    if(ae) e.f.wort=(e.f.wort||'')+' '+MARKWORT[ae.typ]+' geändert aenderung';
+    e.hay=Object.values(e.f).join(' ').toLowerCase();
+  });
+  return out;
+})();
+
+const FELD={name:'name',ip:'ip',adresse:'ip',mac:'mac',hersteller:'hersteller',
+  typ:'typ',netz:'netz',vlan:'vlan',switch:'switch',port:'port',ap:'ap',
+  zustand:'zustand',modell:'modell',dose:'dose',raum:'raum',notiz:'notiz'};
+function aktualisiereSuchname(id){
+  const e=IDX.find(x=>x.id===id),d=byId.get(id); if(!e||!d) return;
+  e.f.name=namenText(d);e.hay=Object.values(e.f).join(' ').toLowerCase();
+}
+/* Einzelne Wörter, die für sich schon ein Filter sind */
+const WORT={unbenannt:1,frei:1,trunk:1,access:1,sammelport:1,gesehen:1,still:1,
+  fiber:1,glas:1,kupfer:1,neu:1,'geändert':1,verschwunden:1,'änderung':1,
+  notiz:1,gepflegt:1};
+
+/* Gepflegtes wird beim Suchen FRISCH gelesen, nicht beim Bauen des
+   Verzeichnisses eingebacken. Sonst waere eine gerade eingetragene Notiz erst
+   nach dem naechsten Laden auffindbar — und genau danach sucht man sie. */
+function pflegeFeld(id,k){
+  const pf=PFLEGE[id];
+  if(!pf) return '';
+  if(k==='dose'||k==='raum'||k==='notiz'||k==='name') return pf[k]||'';
+  return '';
+}
+function pflegeText(id){
+  const pf=PFLEGE[id];
+  return pf ? [pf.dose,pf.raum,pf.notiz,pf.name,'notiz','gepflegt'].filter(Boolean).join(' ').toLowerCase() : '';
+}
+
+function passt(e,term){
+  const i=term.indexOf(':');
+  if(i>0){
+    const k=FELD[term.slice(0,i)], v=term.slice(i+1);
+    if(!k) return false;
+    const feld=(k==='name' ? [e.f.name,pflegeFeld(e.id,k)].filter(Boolean).join(' ')
+                : (k==='dose'||k==='raum'||k==='notiz')
+                  ? pflegeFeld(e.id,k) : (e.f[k]||'')).toLowerCase();
+    if(!v) return !!feld;            // „vlan:" heisst: hat ueberhaupt eines
+    if(!feld) return false;
+    if(k==='vlan') return feld.split(/[\s,]+/).includes(v) || feld==='alle';
+    return feld.includes(v);
+  }
+  if(WORT[term]) return (e.f.wort||'').toLowerCase().includes(term)
+                     || (e.f.zustand||'').toLowerCase().includes(term)
+                     || (e.f.typ||'').toLowerCase().includes(term)
+                     || pflegeText(e.id).includes(term);
+  const d=byId.get(e.id);
+  return e.hay.includes(term) || (d&&namenText(d).toLowerCase().includes(term))
+    || pflegeText(e.id).includes(term);
+}
+
+const hits=document.getElementById('hits'), q=document.getElementById('q');
+const qhint=document.getElementById('qhint');
+/* Ohne Eingabe bleibt die Trefferliste leer — die Leiste soll ruhig sein,
+   solange man nichts sucht. */
+function search(){
+  const s=q.value.trim().toLowerCase();
+  hits.textContent='';
+  qhint.hidden = !!s;
+  if(!s) return;
+
+  /* Mehrere Begriffe werden UND-verknüpft — „netz:iot unbenannt" meint beides. */
+  const terms=s.split(/\s+/).filter(Boolean);
+  const list=IDX.filter(e=>terms.every(tm=>passt(e,tm)))
+                .sort((a,b)=>(KINDRANG[a.kind]-KINDRANG[b.kind])
+                          || String((N.get(a.id)||{}).label||a.f.name).localeCompare(
+                               String((N.get(b.id)||{}).label||b.f.name),'de'));
+
+  if(!list.length){
+    hits.innerHTML='<li class="empty">Nichts gefunden. Filter: '
+      +'<span style="color:var(--muted)">name: ip: mac: hersteller: typ: netz: vlan: switch: port: ap:</span></li>';
+    return;
+  }
+  let letzte=null;
+  list.slice(0,60).forEach(e=>{
+    if(e.kind!==letzte){
+      letzte=e.kind;
+      const g=document.createElement('li'); g.className='grp';
+      g.textContent=MEHRZAHL[e.kind]||e.kind;
+      hits.append(g);
+    }
+    const li=document.createElement('li'), b=document.createElement('button');
+    const nm=document.createElement('span'); nm.className='nm';
+    nm.textContent = e.kind==='port' ? nodeLabelFull(e.id) : (N.get(e.id)||{}).label||e.f.name;
+    const ip=document.createElement('span'); ip.className='ip'; ip.textContent=e.rechts;
+    b.append(nm,ip);
+    b.onclick=()=>flyTo(e.id);
+    b.title=[e.f.typ,e.f.hersteller,e.f.netz&&('Netz '+e.f.netz)].filter(Boolean).join(' · ');
+    li.append(b); hits.append(li);
+  });
+}
+q.oninput=search;
+
+/* Vier Beispiele, solange nichts eingegeben ist: sie zeigen die Schreibweise,
+   statt sie zu erklären. Ein Klick setzt sie ein. */
+['neu','raum:keller','vlan:20','frei'].forEach(x=>{
+  const b=document.createElement('button'); b.type='button'; b.textContent=x;
+  b.onclick=()=>{ q.value=x; q.focus(); search(); };
+  qhint.append(b);
+});
+q.addEventListener('focus',()=>{ if(!q.value.trim()) qhint.hidden=false; });
+q.addEventListener('blur',()=>{ setTimeout(()=>{ if(!q.value.trim()) qhint.hidden=true; },180); });
+
+/* Sprung: die Leinwand fliegt zum Ziel und entfaltet den Weg dorthin */
+function flyTo(id){
+  if(par[lens][id]===undefined && id!==ROOT[lens]){
+    /* in dieser Linse nicht vorhanden — Linse wechseln, die es kennt */
+    const alt=['topo','ipnet','ap','dhcp'].find(l=>par[l][id]!==undefined || id===ROOT[l]);
+    if(alt){
+      lens=alt;
+      document.querySelectorAll('.lens').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.lens===alt)));
+    }
+  }
+  go(id);
+}
+
+/* --- Notiz, Dose und Raum -------------------------------------------------
+   Anzuhaengen an ALLES: an einen Port, ein Netz, einen Switch, ein Geraet.
+   Gespeichert wird erst auf dem Server; nur bestaetigte Werte erscheinen lokal. */
+const pfPanel=document.getElementById('pflege');
+const pfD=document.getElementById('pf-dose'), pfR=document.getElementById('pf-raum'),
+      pfN=document.getElementById('pf-notiz'), pfName=document.getElementById('pf-name'),
+      pfE=document.getElementById('pf-erwartet'),
+      pfNameZeile=document.getElementById('pf-name-zeile'),pfF=document.getElementById('pf-fuss');
+function pflegeOeffnen(){
+  const p=PFLEGE[focus]||{};
+  const d=byId.get(focus),istGeraet=!!d;
+  document.getElementById('pflege-kopf').firstChild.textContent=
+    (N.has(focus)?nodeLabelFull(focus):focus)+' ';
+  pfD.value=p.dose||''; pfR.value=p.raum||''; pfN.value=p.notiz||''; pfE.value=p.erwartet||'';
+  pfNameZeile.hidden=!istGeraet;
+  pfName.value=istGeraet?(p.name||(d.namensquelle==='gepflegt'?d.label:'')):'';
+  pfD.disabled = N.get(focus).kind!=='port';
+  pfF.textContent = istGeraet
+    ? 'Der vergebene Name steht danach sofort auf Karte und in der Suche.'
+    : pfD.disabled
+    ? 'Eine Wanddose gehört an einen Port. Raum und Notiz gehen überall.'
+    : 'Die Dose ist die einzige Angabe, die aus der Karte in den Raum zeigt.';
+  pfPanel.hidden=false; hideTip();
+  (istGeraet?pfName:pfD.disabled?pfR:pfD).focus();
+}
+async function pflegeSpeichern(){
+  const schluessel=focus;
+  const neu={dose:pfD.value.trim(), raum:pfR.value.trim(), notiz:pfN.value.trim(),
+             erwartet:pfE.value.trim()};
+  if(byId.has(schluessel)) neu.name=pfName.value.trim();
+  pfF.textContent='wird gespeichert …';
+  try{
+    const antwort=await fetch('/api/pflege/'+apiPfad(schluessel),{
+      method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(neu),
+    });
+    if(!antwort.ok) throw new Error('HTTP '+antwort.status);
+    const gespeichert=await antwort.json();
+    if(!neu.dose && !neu.raum && !neu.notiz && !neu.erwartet && !gespeichert.name && !gespeichert.betreuer)
+      delete PFLEGE[schluessel];
+    else PFLEGE[schluessel]=gespeichert;
+    fundeNachPflege(schluessel,gespeichert.erwartet||'');
+    if(byId.has(schluessel)&&gespeichert.name){
+      const d=byId.get(schluessel),n=N.get(schluessel);
+      d.label=gespeichert.name;d.namensquelle='gepflegt';
+      d.namen={...(d.namen||{}),gepflegt:gespeichert.name};
+      n.label=gespeichert.name;n.sub=d.typ;
+    }else if(byId.has(schluessel)&&neu.name===''&&byId.get(schluessel).namensquelle==='gepflegt'){
+      /* Beim Loeschen faellt die Anzeige auf die beste gemessene Quelle zurueck,
+         damit lokal nicht bis zum naechsten Laden der alte Pflegename stehen bleibt. */
+      const d=byId.get(schluessel),n=N.get(schluessel),namen={...(d.namen||{})};
+      delete namen.gepflegt;
+      const reihenfolge=['Inventar','Reservierung','WLAN','DHCP'];
+      const ersatz=reihenfolge.map(q=>[q,namen[q]]).find(([,v])=>v&&v.toLowerCase()!==d.mac.toLowerCase());
+      d.namen=namen;d.label=ersatz?ersatz[1]:d.mac;d.namensquelle=ersatz?ersatz[0]:'';
+      n.label=d.label;n.sub=d.typ;
+    }
+    if(byId.has(schluessel)) aktualisiereSuchname(schluessel);
+    pfPanel.hidden=true;
+    apply(false);                     // Reissnadel und Auskunft nachziehen
+  }catch(e){
+    pfF.textContent='Speichern fehlgeschlagen. Die Eingabe ist noch nicht gespeichert.';
+  }
+}
+document.getElementById('notizKnopf').onclick=pflegeOeffnen;
+document.getElementById('nameKnopf').onclick=pflegeOeffnen;
+document.getElementById('pf-speichern').onclick=pflegeSpeichern;
+document.getElementById('pf-leeren').onclick=()=>{
+  pfD.value=pfR.value=pfN.value=pfName.value=''; pflegeSpeichern();
+};
+document.getElementById('x-pflege').onclick=()=>{pfPanel.hidden=true;};
+
+/* --- Die übrigen Kinder: was nicht gezeichnet wurde ------------------------
+   Kein Blättern durch Seiten — eine Liste mit eigenem Filter. Wer eines von
+   130 Geräten sucht, tippt drei Buchstaben und ist dort. */
+const mliste=document.getElementById('mliste'), mq=document.getElementById('mq');
+let LISTE=null;
+function zeigeMehr(){
+  LISTE={ids:MEHR.ids.slice(),titel:'alle '+MEHR.ids.length};
+  const pan=document.getElementById('mehr');
+  document.getElementById('mehr-kopf').firstChild.textContent =
+    'alle '+MEHR.ids.length+' ';
+  mq.value=''; malMehr(); pan.hidden=false; mq.focus();
+}
+function zeigeMehrMit(ids,titel){
+  LISTE={ids:[...new Set(ids)],titel};
+  document.getElementById('mehr-kopf').firstChild.textContent=titel+' · '+LISTE.ids.length+' ';
+  mq.value='';malMehr();document.getElementById('mehr').hidden=false;mq.focus();
+}
+function malMehr(){
+  const f=mq.value.trim().toLowerCase();
+  mliste.textContent='';
+  const ids=(LISTE?LISTE.ids:MEHR.ids).slice();
+  if(lens==='ipnet') ids.sort((a,b)=>geraeteIpVergleich(a,b));
+  ids.filter(id=>{
+    if(!f) return true;
+    const d=byId.get(id);
+    const n=N.get(id);
+    return (id+' '+(d?[namenText(d),d.mac,...(d.ips||[]),d.hersteller,d.typ,d.essid]
+      .filter(Boolean).join(' '):n?[n.label,n.sub].filter(Boolean).join(' '):'')).toLowerCase().includes(f);
+  }).slice(0,300).forEach(id=>{
+    const d=byId.get(id), li=document.createElement('li'), b=document.createElement('button');
+    const nm=document.createElement('span'); nm.className='nm';
+    nm.textContent=N.has(id)?labelShort(id):id;
+    const ip=document.createElement('span'); ip.className='ip';
+    ip.textContent=lens==='dhcp'?(DHCPORT.get(id)||{}).adresse||'':d?d.ip:'';
+    b.append(nm,ip);
+    b.onclick=()=>{ document.getElementById('mehr').hidden=true; go(id); };
+    li.append(b); mliste.append(li);
+  });
+  if(!mliste.children.length)
+    mliste.innerHTML='<li class="empty">Nichts in dieser Liste.</li>';
+}
+mq.oninput=malMehr;
+document.getElementById('alleN').onclick=zeigeMehr;
+document.getElementById('x-mehr').onclick=()=>{document.getElementById('mehr').hidden=true;LISTE=null;};
+
+/* --- Veränderungen --- */
+
+const chg=document.getElementById('chg');
+document.getElementById('chgN').textContent=CHANGES.length;
+const KATNAME={port:'Port',ip:'IP',wlan:'WLAN',dhcp:'DHCP',inventar:'Inventar'};
+const KATFOLGE=['port','ip','wlan','dhcp','inventar'];
+let chgKat='alle';
+function malChanges(){
+  chg.textContent='';
+  const liste=CHANGES.filter(c=>chgKat==='alle'||(c[5]||'port')===chgKat);
+  liste.forEach(([t,id,when,what,_betrifft,kat])=>{
+    const li=document.createElement('li'),b=document.createElement('button');
+    const tag=document.createElement('span');tag.className='tag '+t;
+    tag.textContent=t==='neu'?'neu':t==='weg'?'still':'geändert';
+    const wrap=document.createElement('span');
+    const nm=document.createElement('span');nm.className='chg-t';
+    nm.textContent=byId.has(id)?byId.get(id).label:id;
+    const sub=document.createElement('div');sub.style.cssText='font-size:10.5px;color:var(--muted);font-family:var(--body)';
+    /* Die Art steht in "Alle" vor der Beschreibung — im gefilterten Blick
+       waere sie doppelt. */
+    if(chgKat==='alle'){
+      const k=document.createElement('span');k.className='chgkat';k.textContent=KATNAME[kat||'port']||kat;
+      sub.append(k);
+    }
+    sub.append(document.createTextNode(what));
+    wrap.append(nm,sub);
+    const w=document.createElement('span');w.className='chg-s';w.textContent=when;
+    b.append(tag,wrap,w);
+    b.onclick=()=>flyTo(id);
+    li.append(b);chg.append(li);
+  });
+  if(!liste.length) chg.innerHTML='<li class="empty">Keine Veränderungen dieser Art.</li>';
+}
+(function filterBauen(){
+  const leiste=document.getElementById('chgfilter');
+  const zahl={};
+  CHANGES.forEach(c=>{const k=c[5]||'port'; zahl[k]=(zahl[k]||0)+1;});
+  const knoepfe=[['alle','Alle',CHANGES.length],
+                 ...KATFOLGE.filter(k=>zahl[k]).map(k=>[k,KATNAME[k],zahl[k]])];
+  knoepfe.forEach(([k,name,n])=>{
+    const b=document.createElement('button');
+    b.dataset.kat=k; b.setAttribute('aria-pressed',String(k===chgKat));
+    b.append(document.createTextNode(name));
+    const z=document.createElement('b'); z.textContent=n; b.append(z);
+    b.onclick=()=>{
+      chgKat=k;
+      leiste.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
+      malChanges();
+    };
+    leiste.append(b);
+  });
+})();
+malChanges();
+
+/* --- Funde --------------------------------------------------------------- */
+const fund=document.getElementById('fund');
+function fundZahl(){
+  document.getElementById('fundN').textContent=FUNDE.filter(f=>f.schwere==='warn'&&!f.erwartet).length;
+}
+fundZahl();
+let fundKat='alle';
+function gefilterteFunde(){return FUNDE.filter(f=>fundKat==='alle'||f.kategorie===fundKat);}
+function fundSprung(f){
+  if(!f.objekt||!N.has(f.objekt)) return;
+  const ziel={port:'topo',ip:'ipnet',wlan:'ap',dhcp:'dhcp'}[f.kategorie]||'topo';
+  const passt=f.objekt===ROOT[ziel]||par[ziel][f.objekt]!==undefined;
+  const nl=passt?ziel:'topo';
+  if(lens!==nl) document.querySelector('.lens[data-lens="'+nl+'"]').click();
+  flyTo(f.objekt);
+}
+function malFunde(){
+  fund.textContent='';const liste=gefilterteFunde();
+  liste.forEach(f=>{
+    const li=document.createElement('li'),b=document.createElement('button');
+    const tag=document.createElement('span');
+    tag.className='tag '+(f.schwere==='warn'&&!f.erwartet?'warn':'info');
+    tag.textContent=f.erwartet?'Erwartet':f.schwere==='warn'?'Warnung':'Info';
+    if(f.erwartet) li.className='erwartet';
+    const wrap=document.createElement('span'),txt=document.createElement('span');txt.className='chg-t';txt.textContent=f.text;
+    const sub=document.createElement('div');sub.style.cssText='font-size:10px;color:var(--dim);font-family:var(--mono)';
+    sub.textContent=(KATNAME[f.kategorie]||f.kategorie)+(f.erwartet?' · '+f.erwartet:'');
+    wrap.append(txt,sub);b.append(tag,wrap);
+    if(f.objekt&&N.has(f.objekt))b.onclick=()=>fundSprung(f);else b.disabled=true;
+    li.append(b);
+    if(f.objekt){
+      const ok=document.createElement('button');ok.className='fund-ok';
+      ok.textContent=f.erwartet?'wieder melden':'erwartet …';
+      ok.title=f.erwartet?'Bestätigung zurücknehmen':'Als erwartet bestätigen, mit Begründung';
+      ok.onclick=()=>fundBestaetigen(f,ok);
+      li.append(ok);
+    }
+    fund.append(li);
+  });
+  if(!liste.length)fund.innerHTML='<li class="empty">Keine Funde dieser Art.</li>';
+}
+(function fundFilterBauen(){
+  const leiste=document.getElementById('fundfilter'),zahl={};
+  FUNDE.forEach(f=>zahl[f.kategorie]=(zahl[f.kategorie]||0)+1);
+  [['alle','Alle',FUNDE.length],...['port','ip','wlan','dhcp'].filter(k=>zahl[k]).map(k=>[k,KATNAME[k],zahl[k]])]
+    .forEach(([k,name,n])=>{
+      const b=document.createElement('button');b.setAttribute('aria-pressed',String(k===fundKat));b.append(document.createTextNode(name));
+      const z=document.createElement('b');z.textContent=n;b.append(z);b.onclick=()=>{
+        fundKat=k;leiste.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));malFunde();
+      };leiste.append(b);
+    });
+})();
+malFunde();
+/* Bestaetigen schreibt das Pflegefeld `erwartet` des betroffenen Objekts. */
+async function fundBestaetigen(f,knopf){
+  let grund='';
+  if(!f.erwartet){
+    grund=(prompt('Warum ist das in Ordnung?\n'+f.text,'')||'').trim();
+    if(!grund) return;
+  }
+  knopf.disabled=true;
+  try{
+    const antwort=await fetch('/api/pflege/'+apiPfad(f.objekt),{
+      method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({erwartet:grund}),
+    });
+    if(!antwort.ok) throw new Error('HTTP '+antwort.status);
+    const gespeichert=await antwort.json();
+    if(Object.keys(gespeichert).some(k=>['dose','raum','notiz','name','betreuer','erwartet'].includes(k)&&gespeichert[k]))
+      PFLEGE[f.objekt]=gespeichert;
+    else delete PFLEGE[f.objekt];
+    fundeNachPflege(f.objekt,grund);
+  }catch(e){
+    knopf.disabled=false;knopf.textContent='fehlgeschlagen';
+  }
+}
+function fundeNachPflege(objekt,grund){
+  FUNDE.forEach(f=>{
+    if(f.objekt===objekt||(f.betrifft||[]).includes(objekt)){
+      if(grund) f.erwartet=grund; else delete f.erwartet;
+    }
+  });
+  const rang={warn:0,info:1};
+  FUNDE.sort((a,b)=>(!!a.erwartet-!!b.erwartet)||(rang[a.schwere]-rang[b.schwere])||
+    a.kategorie.localeCompare(b.kategorie)||a.text.localeCompare(b.text));
+  fundmapBauen();fundZahl();malFunde();
+  if(typeof apply==='function') apply(false);
+}
+document.getElementById('fund-export').onclick=async e=>{
+  const text=mdTabelle(['Schwere','Kategorie','Text','Objekt','Erwartet'],gefilterteFunde().map(f=>
+    [f.schwere,KATNAME[f.kategorie]||f.kategorie,f.text,f.objekt||'—',f.erwartet||'']));
+  const alt=e.currentTarget.textContent;if(await textKopieren(text)){
+    e.currentTarget.textContent='als Markdown kopiert';setTimeout(()=>e.currentTarget.textContent=alt,1600);
+  }
+};
+
+/* --- Überlagerungen schalten --- */
+function toggle(btn,panel,onOpen){
+  const b=document.getElementById(btn),p=document.getElementById(panel);
+  b.onclick=()=>{
+    const open=p.hidden;
+    if(open&&['changes','findings'].includes(panel)){
+      ['changes','findings'].filter(x=>x!==panel).forEach(x=>{
+        document.getElementById(x).hidden=true;
+        document.getElementById(x==='changes'?'t-changes':'t-findings').setAttribute('aria-pressed','false');
+      });
+    }
+    p.hidden=!open;b.setAttribute('aria-pressed',String(open));
+    if(open&&onOpen)onOpen();hashSchreiben(open?(panel==='findings'?'funde':panel):undefined);
+  };
+  const x=p.querySelector('.x');
+  if(x&&x.id!=='x-card') x.onclick=()=>{p.hidden=true;b.setAttribute('aria-pressed','false');hashSchreiben();};
+}
+toggle('t-changes','changes');
+toggle('t-findings','findings');
+
+document.getElementById('t-link').onclick=async e=>{
+  hashSchreiben();
+  const alt=e.currentTarget.textContent;
+  if(await textKopieren(location.href)){e.currentTarget.textContent='kopiert';setTimeout(()=>e.currentTarget.textContent=alt,1600);}
+};
+
+addEventListener('keydown',e=>{
+  const imFeld = e.target===q;
+  if(e.key==='Escape'){
+    if(imFeld && q.value){ q.value=''; search(); return; }
+    hideCard(); hideTip();
+    document.getElementById('changes').hidden=true;
+    document.getElementById('t-changes').setAttribute('aria-pressed','false');
+    document.getElementById('findings').hidden=true;
+    document.getElementById('t-findings').setAttribute('aria-pressed','false');
+    document.getElementById('compare').hidden=true;
+    vergleichAbbrechen();hashSchreiben();
+    q.blur();
+  }
+  /* Schrägstrich springt ins Suchfeld — der übliche Griff. */
+  if(e.key==='/' && !imFeld){ e.preventDefault(); q.focus(); q.select(); }
+  if(e.key==='Enter' && imFeld){
+    const erste=hits.querySelector('button'); if(erste) erste.click();
+  }
+  if(e.key==='Backspace'&&!imFeld&&e.target===document.body){
+    const p=par[lens][focus];if(p)go(p);
+  }
+});
+
+document.getElementById('datenstand').textContent=STAND.angezeigt||STAND.stand||'—';
+document.querySelectorAll('.lens').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.lens===lens)));
+const STARTPANEL=STARTPARAMS.get('panel');
+if(STARTPANEL==='changes'){
+  document.getElementById('changes').hidden=false;document.getElementById('t-changes').setAttribute('aria-pressed','true');
+}else if(STARTPANEL==='funde'){
+  document.getElementById('findings').hidden=false;document.getElementById('t-findings').setAttribute('aria-pressed','true');
+}
+hashSchreiben(STARTPANEL==='changes'||STARTPANEL==='funde'?STARTPANEL:undefined);
+search();
+/* erst zeichnen, wenn die Leinwand ihre Groesse kennt — sonst bleibt der Ausschnitt falsch */
+requestAnimationFrame(()=>{ cy.resize(); apply(false); });
+addEventListener('resize',()=>{ cy.resize(); apply(false); });
+
+/* Ein eingefuegter Verweis in einem schon offenen Tab laedt die Seite nicht
+   neu — nur der Hash aendert sich. Ohne diesen Horcher bliebe die Karte, wo sie
+   war, und der geteilte Befund liefe ins Leere. `replaceState` loest das
+   Ereignis nicht aus, eigene Aktualisierungen erzeugen also keine Schleife. */
+addEventListener('hashchange',()=>{
+  const p=new URLSearchParams(location.hash.replace(/^#/,''));
+  const nl=p.get('linse'), nf=p.get('fokus');
+  if(['topo','ipnet','ap','dhcp'].includes(nl) && nl!==lens){
+    const knopf=document.querySelector('.lens[data-lens="'+nl+'"]');
+    if(knopf) knopf.click();
+  }
+  if(nf && N.has(nf) && (nf===ROOT[lens] || par[lens][nf]!==undefined)) go(nf);
+});
+</script>

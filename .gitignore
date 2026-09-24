@@ -1,0 +1,5 @@
+*.pyc
+.env
+.pytest_cache/
+__pycache__/
+vorschau.html
