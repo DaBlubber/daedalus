@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""HTTP-Oberflaeche fuer den aktuellen Daedalus-Stand.
+"""HTTP interface for the current Daedalus state.
 
-Die App bleibt absichtlich schmal: sie uebersetzt die vorhandenen Fachobjekte
-in JSON und ueberlaesst Aufbau und Bewegung weiterhin dem abgenommenen HTML.
+The app is deliberately thin: it translates the existing domain objects into JSON
+and leaves layout and motion to the HTML page.
 """
 from __future__ import annotations
 
@@ -20,266 +20,281 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import aktionen
-from .kette import kette, wer_hing_hier
-from .speicher import PgSpeicher
-from .stand import bauen
-from .zeit import anzeige, mit_zeitzone
+from . import actions
+from .chain import chain, who_was_here
+from .state import build
+from .store import PgStore
+from .timeutil import display
 
 
-HTML_PFAD = Path(__file__).with_name("web") / "index.html"
-_STAND_RE = re.compile(
-    r'(<script\s+id="stand"\s+type="application/json">).*?(</script>)',
+HTML_PATH = Path(__file__).with_name("web") / "index.html"
+_STATE_RE = re.compile(
+    r'(<script\s+id="state"\s+type="application/json">).*?(</script>)',
     re.DOTALL,
 )
 
 
-class PflegeEingabe(BaseModel):
-    """Nur die fachlich erlaubten, begrenzten Pflegefelder."""
+class AnnotationInput(BaseModel):
+    """Only the allowed, length-limited annotation fields."""
 
     model_config = ConfigDict(extra="forbid")
 
-    dose: str | None = Field(default=None, max_length=120)
-    raum: str | None = Field(default=None, max_length=120)
-    notiz: str | None = Field(default=None, max_length=2000)
-    betreuer: str | None = Field(default=None, max_length=120)
+    outlet: str | None = Field(default=None, max_length=120)
+    room: str | None = Field(default=None, max_length=120)
+    note: str | None = Field(default=None, max_length=2000)
+    owner: str | None = Field(default=None, max_length=120)
     name: str | None = Field(default=None, max_length=120)
-    erwartet: str | None = Field(default=None, max_length=300)
+    expected: str | None = Field(default=None, max_length=300)
 
 
-class AktionZiel(BaseModel):
+class ActionTarget(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    ziel: str = Field(max_length=15)
+    target: str = Field(max_length=15)
 
 
-class AktionPort(AktionZiel):
+class ActionPort(ActionTarget):
     port: int
 
 
-class AktionWol(BaseModel):
+class ActionWol(BaseModel):
     model_config = ConfigDict(extra="forbid")
     mac: str = Field(max_length=17)
     ip: str | None = Field(default=None, max_length=15)
 
 
-def _json_wert(wert):
-    """Fachobjekte fuer die Detailantwort verlustarm JSON-faehig machen."""
-    if isinstance(wert, datetime):
-        return anzeige(wert)
-    if isinstance(wert, Enum):
-        return wert.value
-    if is_dataclass(wert):
-        return {k: _json_wert(v) for k, v in asdict(wert).items()}
-    if isinstance(wert, dict):
-        return {k: _json_wert(v) for k, v in wert.items()}
-    if isinstance(wert, (list, tuple)):
-        return [_json_wert(v) for v in wert]
-    return wert
+def _json_value(value):
+    """Make domain objects JSON-serialisable for the detail response, losing little."""
+    if isinstance(value, datetime):
+        return display(value)
+    if isinstance(value, Enum):
+        return value.value
+    if is_dataclass(value):
+        return {k: _json_value(v) for k, v in asdict(value).items()}
+    if isinstance(value, dict):
+        return {k: _json_value(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_value(v) for v in value]
+    return value
 
 
-def _pflege_wert(pflege) -> dict:
-    if pflege is None:
+def _annotation_value(annotation) -> dict:
+    if annotation is None:
         return {}
-    if isinstance(pflege, dict):
-        return _json_wert(pflege)
-    return _json_wert(pflege)
+    return _json_value(annotation)
 
 
-def stand_einbetten(html: str, stand: dict) -> str:
-    """Den Stand als Daten, nicht als ausfuehrbares JavaScript, einbetten.
+def embed_state(html: str, state: dict) -> str:
+    """Embed the state as data, not as executable JavaScript.
 
-    Das Escaping von ``</`` verhindert, dass Nutzdaten den script-Block vorzeitig
-    schliessen. JSON-Sonderzeichen bleiben dabei unveraendert parsebar.
+    Escaping ``</`` prevents payload data from closing the script block early.
+    JSON special characters stay parseable unchanged.
     """
-    daten = json.dumps(stand, ensure_ascii=False, separators=(",", ":"))
-    daten = daten.replace("</", "<\\/")
-    # Eine Funktion als Ersatz ist wichtig: re.sub wuerde Backslashes aus dem
-    # JSON sonst selbst als Gruppen- oder Escape-Syntax auswerten.
-    ersetzt, anzahl = _STAND_RE.subn(
-        lambda treffer: treffer.group(1) + daten + treffer.group(2), html, count=1
+    data = json.dumps(state, ensure_ascii=False, separators=(",", ":"))
+    data = data.replace("</", "<\\/")
+    # A function as the replacement matters: re.sub would otherwise interpret
+    # backslashes from the JSON as group or escape syntax.
+    replaced, count = _STATE_RE.subn(
+        lambda m: m.group(1) + data + m.group(2), html, count=1
     )
-    if anzahl != 1:
-        raise RuntimeError("index.html enthaelt keinen eindeutigen Stand-Platzhalter")
-    return ersetzt
+    if count != 1:
+        raise RuntimeError("index.html has no unique state placeholder")
+    return replaced
 
 
-def app_bauen(
-    verbinden: Callable[[], object],
-    speicher_bauen: Callable[[object], object] = PgSpeicher,
+def build_app(
+    connect: Callable[[], object],
+    store_factory: Callable[[object], object] = PgStore,
+    root: str | None = None,
 ) -> FastAPI:
-    """Eine testbare App mit injizierbarer Verbindung und Speicher bauen."""
+    """Build a testable app with injectable connection and store.
+
+    Without `root` the site configuration is read on the first request (the root
+    switch, networks and switches come from `daedalus.toml`)."""
     app = FastAPI(title="Daedalus")
+    site: dict = {}
+
+    def root_switch() -> str:
+        if root is not None:
+            return root
+        if "root" not in site:
+            site["root"] = _root_from_config()
+        return site["root"]
 
     @contextmanager
-    def speicher() -> Iterator[object]:
-        # Eine Verbindung je Anfrage ist hier die robustere Wahl: nach einem
-        # Proxy- oder DB-Abbruch kann keine tote Verbindung die naechste Anfrage
-        # vergiften. Bei diesem kleinen internen Dienst ist der Verbindungsaufbau
-        # billiger und durchschaubarer als ein eigener Pool mit Wiederbelebung.
-        db = verbinden()
+    def store() -> Iterator[object]:
+        # One connection per request is the more robust choice here: after a proxy
+        # or database outage no dead connection can poison the next request. For
+        # this small service, connecting is cheaper and easier to follow than an
+        # own pool with revival.
+        db = connect()
         try:
-            yield speicher_bauen(db)
+            yield store_factory(db)
         finally:
-            schliessen = getattr(db, "close", None)
-            if callable(schliessen):
-                schliessen()
+            close = getattr(db, "close", None)
+            if callable(close):
+                close()
 
-    def aktuellen_stand(bestand) -> dict:
+    def current_state(s) -> dict:
         from datetime import timedelta
-        from .zeit import jetzt
-        t = jetzt()
-        return bauen(
-            bestand,
-            wurzel="bb8",
-            pflege=bestand.pflege.alle(),
-            sichtungen=bestand.sichtungen(),
-            zeitpunkt=t,
-            gesundheit=bestand.portgesundheit(t),
-            wechsel=bestand.wechsel_seit("link_wechsel", t - timedelta(hours=24)),
+        from .timeutil import now
+        t = now()
+        return build(
+            s,
+            root=root_switch(),
+            annotations=s.annotations.all(),
+            sightings=s.sightings(),
+            timestamp=t,
+            health=s.port_health(t),
+            transitions=s.transitions_since("link_change", t - timedelta(hours=24)),
         )
 
     @app.get("/", response_class=HTMLResponse)
-    def startseite():
-        with speicher() as bestand:
-            inhalt = stand_einbetten(
-                HTML_PFAD.read_text(encoding="utf-8"),
-                aktuellen_stand(bestand),
+    def start_page():
+        with store() as s:
+            content = embed_state(
+                HTML_PATH.read_text(encoding="utf-8"),
+                current_state(s),
             )
-        return HTMLResponse(inhalt)
+        return HTMLResponse(content)
 
-    @app.get("/api/stand")
-    def api_stand():
-        with speicher() as bestand:
-            return aktuellen_stand(bestand)
+    @app.get("/api/state")
+    def api_state():
+        with store() as s:
+            return current_state(s)
 
-    @app.get("/api/objekt/{schluessel:path}")
-    def api_objekt(schluessel: str):
-        with speicher() as bestand:
-            weg = kette(bestand, schluessel, "bb8")
-            glieder = [
+    @app.get("/api/object/{key:path}")
+    def api_object(key: str):
+        with store() as s:
+            path = chain(s, key, root_switch())
+            links = [
                 {
-                    "art": glied.art,
-                    "name": glied.name,
-                    "port": glied.port,
-                    "gemessen": glied.gemessen,
+                    "kind": link.kind,
+                    "name": link.name,
+                    "port": link.port,
+                    "measured": link.measured,
                 }
-                for glied in weg.glieder
+                for link in path.links
             ]
-            verlauf = [_json_wert(i) for i in bestand.verlauf(schluessel)]
-            # MACs und Sonderkennungen enthalten ebenfalls Doppelpunkte. Nur
-            # die Form "Knoten:Port" ist eine sinnvolle Rueckwaertsfrage.
-            ist_port = schluessel.count(":") == 1 and not schluessel.startswith(
-                ("ap:", "netz:")
-            )
-            hing_hier = []
-            if ist_port:
-                hing_hier = [
-                    {"objekt": objekt, "ab": _json_wert(ab), "bis": _json_wert(bis)}
-                    for objekt, ab, bis in wer_hing_hier(bestand, schluessel)
+            history = [_json_value(i) for i in s.history(key)]
+            # MACs and special ids contain colons as well. Only the form
+            # "node:port" is a meaningful backwards question.
+            is_port = key.count(":") == 1 and not key.startswith(("ap:", "net:"))
+            was_here = []
+            if is_port:
+                was_here = [
+                    {"object": obj, "since": _json_value(since), "until": _json_value(until)}
+                    for obj, since, until in who_was_here(s, key)
                 ]
             return {
-                "kette": glieder,
-                "eindeutig": weg.eindeutig,
-                "vollstaendig": weg.vollstaendig,
-                "verlauf": verlauf,
-                "hing_hier": hing_hier,
-                "pflege": _pflege_wert(bestand.pflege.lesen(schluessel)),
+                "chain": links,
+                "unambiguous": path.unambiguous,
+                "complete": path.complete,
+                "history": history,
+                "was_here": was_here,
+                "annotation": _annotation_value(s.annotations.read(key)),
             }
 
-    @app.put("/api/pflege/{schluessel:path}")
-    def api_pflege_schreiben(
-        schluessel: str,
-        eingabe: PflegeEingabe,
-        bevorzugter_name: str | None = Header(
+    @app.put("/api/annotation/{key:path}")
+    def api_write_annotation(
+        key: str,
+        body: AnnotationInput,
+        preferred_name: str | None = Header(
             default=None, alias="X-Forwarded-Preferred-Username"
         ),
-        weitergeleiteter_name: str | None = Header(
+        forwarded_user: str | None = Header(
             default=None, alias="X-Forwarded-User"
         ),
     ):
-        with speicher() as bestand:
-            pflege = bestand.pflege.schreiben(
-                schluessel,
-                von=bevorzugter_name or weitergeleiteter_name or "",
-                **eingabe.model_dump(exclude_unset=True),
+        with store() as s:
+            annotation = s.annotations.write(
+                key,
+                changed_by=preferred_name or forwarded_user or "",
+                **body.model_dump(exclude_unset=True),
             )
-            return _pflege_wert(pflege)
+            return _annotation_value(annotation)
 
-    # --- Aktionen ---------------------------------------------------------------
-    # Nur POST mit JSON-Koerper: ein fremder Browser-Tab kann das nicht ohne
-    # CORS-Vorabfrage absetzen, und die beantwortet dieser Dienst nicht.
-    def _aktion(funktion, *args):
+    # --- actions -----------------------------------------------------------------
+    # POST with a JSON body only: a foreign browser tab cannot send that without a
+    # CORS preflight, and this service does not answer one.
+    def _action(function, *args):
+        # The allowed networks come from the site configuration - make sure it has
+        # been read even if no page was loaded since the start.
+        root_switch()
         try:
-            return funktion(*args)
-        except aktionen.Abgelehnt as e:
+            return function(*args)
+        except actions.Refused as e:
             raise HTTPException(status_code=422, detail=str(e)) from e
 
-    @app.post("/api/aktion/ping")
-    def aktion_ping(eingabe: AktionZiel):
-        return _aktion(aktionen.ping, eingabe.ziel)
+    @app.post("/api/action/ping")
+    def action_ping(body: ActionTarget):
+        return _action(actions.ping, body.target)
 
-    @app.post("/api/aktion/traceroute")
-    def aktion_traceroute(eingabe: AktionZiel):
-        return _aktion(aktionen.traceroute, eingabe.ziel)
+    @app.post("/api/action/traceroute")
+    def action_traceroute(body: ActionTarget):
+        return _action(actions.traceroute, body.target)
 
-    @app.post("/api/aktion/port")
-    def aktion_port(eingabe: AktionPort):
-        return _aktion(aktionen.port_pruefen, eingabe.ziel, eingabe.port)
+    @app.post("/api/action/port")
+    def action_port(body: ActionPort):
+        return _action(actions.check_port, body.target, body.port)
 
-    @app.post("/api/aktion/wol")
-    def aktion_wol(eingabe: AktionWol):
-        return _aktion(aktionen.wake_on_lan, eingabe.mac, eingabe.ip)
+    @app.post("/api/action/wol")
+    def action_wol(body: ActionWol):
+        return _action(actions.wake_on_lan, body.mac, body.ip)
 
-    @app.post("/api/aktion/scan")
-    def aktion_scan(eingabe: AktionZiel):
-        return _aktion(aktionen.scan_starten, eingabe.ziel)
+    @app.post("/api/action/scan")
+    def action_scan(body: ActionTarget):
+        return _action(actions.start_scan, body.target)
 
-    @app.get("/api/aktion/scan/{kennung}")
-    def aktion_scan_status(kennung: str):
-        return _aktion(aktionen.scan_status, kennung)
+    @app.get("/api/action/scan/{ident}")
+    def action_scan_status(ident: str):
+        return _action(actions.scan_status, ident)
 
-    @app.delete("/api/aktion/scan/{kennung}")
-    def aktion_scan_abbrechen(kennung: str):
-        return _aktion(aktionen.scan_abbrechen, kennung)
+    @app.delete("/api/action/scan/{ident}")
+    def action_scan_cancel(ident: str):
+        return _action(actions.cancel_scan, ident)
 
-    @app.get("/api/aktion/faehigkeiten")
-    def aktion_faehigkeiten():
-        # Die Oberflaeche zeigt den Scan-Knopf nur, wenn er auch darf.
-        return {"scan": aktionen.scan_freigegeben()}
+    @app.get("/api/action/capabilities")
+    def action_capabilities():
+        # The UI only shows the scan button if it is allowed.
+        return {"scan": actions.scan_enabled()}
 
-    @app.get("/gesund")
-    def gesund():
+    @app.get("/health")
+    def health():
         return {"ok": True}
 
-    @app.get("/bereit")
-    def bereit():
+    @app.get("/ready")
+    def ready():
         try:
-            db = verbinden()
+            db = connect()
             try:
                 with db.cursor() as cursor:
                     cursor.execute("SELECT 1")
                     cursor.fetchone()
             finally:
-                schliessen = getattr(db, "close", None)
-                if callable(schliessen):
-                    schliessen()
+                close = getattr(db, "close", None)
+                if callable(close):
+                    close()
         except Exception as exc:
-            raise HTTPException(status_code=503, detail="Datenbank nicht bereit") from exc
+            raise HTTPException(status_code=503, detail="database not ready") from exc
         return {"ok": True}
 
     return app
 
 
-def _verbinden():
-    """Die Produktionsverbindung erst bei einer Anfrage aufbauen."""
+def _connect():
+    """Build the production connection only when a request comes in."""
     dsn = os.environ.get("DAEDALUS_DSN")
     if not dsn:
-        raise RuntimeError("DAEDALUS_DSN ist nicht gesetzt")
-    import psycopg
-
-    return psycopg.connect(
-        mit_zeitzone(dsn), autocommit=True, connect_timeout=8
-    )
+        raise RuntimeError("DAEDALUS_DSN is not set")
+    from .db import connect
+    return connect(dsn)
 
 
-app = app_bauen(_verbinden)
+def _root_from_config() -> str:
+    from . import config as site_config
+    cfg = site_config.load()
+    site_config.apply(cfg)
+    return cfg.root_switch
+
+
+app = build_app(_connect)

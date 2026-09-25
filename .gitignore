@@ -1,5 +1,7 @@
 *.pyc
-.env
-.pytest_cache/
 __pycache__/
-vorschau.html
+.pytest_cache/
+.env
+daedalus.toml
+demo.json
+preview.html

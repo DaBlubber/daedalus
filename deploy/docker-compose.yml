@@ -1,0 +1,64 @@
+# Daedalus with its own PostgreSQL - the quickest way to run it.
+#
+#   cp .env.example .env                 # set passwords and SNMP communities
+#   cp daedalus.example.toml daedalus.toml   # describe your network
+#   docker compose -f deploy/docker-compose.yml --env-file .env up -d --build
+#
+# The UI is on http://localhost:8000. It has NO login of its own - put it behind
+# your reverse proxy with authentication before exposing it (see README).
+name: daedalus
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: daedalus
+      POSTGRES_USER: daedalus
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U daedalus -d daedalus"]
+      interval: 10s
+      retries: 10
+
+  # Collects every few minutes, creates the schema and applies migrations.
+  collector:
+    build: ..
+    image: daedalus:local
+    restart: unless-stopped
+    command: ["python", "run.py", "--service"]
+    environment: &env
+      DAEDALUS_DSN: postgresql://daedalus:${POSTGRES_PASSWORD:-change-me}@db:5432/daedalus
+      DAEDALUS_SNMP_FIREWALL: ${DAEDALUS_SNMP_FIREWALL:-}
+      DAEDALUS_SNMP_SWITCH: ${DAEDALUS_SNMP_SWITCH:-}
+      DAEDALUS_CONFIG: /config/daedalus.toml
+      DAEDALUS_SCAN_ENABLED: ${DAEDALUS_SCAN_ENABLED:-no}
+    volumes:
+      - ../daedalus.toml:/config/daedalus.toml:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # The web UI. Reads the same database; never migrates.
+  web:
+    image: daedalus:local
+    restart: unless-stopped
+    command: ["uvicorn", "daedalus.web:app", "--host", "0.0.0.0", "--port", "8000",
+              "--proxy-headers", "--forwarded-allow-ips", "*"]
+    environment: *env
+    volumes:
+      - ../daedalus.toml:/config/daedalus.toml:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/ready',timeout=3)"]
+      interval: 30s
+      retries: 3
+
+volumes:
+  db:

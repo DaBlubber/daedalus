@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""HTTP-Vertrag der Leinwand, ohne eine laufende Datenbank."""
+"""HTTP contract of the canvas, without a running database."""
 from __future__ import annotations
 
 import json
@@ -8,122 +8,122 @@ from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
 
-from daedalus.modell import Beziehung, Intervall
-from daedalus.speicher import ImSpeicher
-from daedalus.web import app_bauen
+from daedalus.model import Interval, Relation
+from daedalus.store import MemoryStore
+from daedalus.web import build_app
 
 
-JETZT = datetime(2026, 9, 16, 10, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 9, 16, 10, 0, tzinfo=timezone.utc)
 
 
-class PflegeDouble:
+class AnnotationsDouble:
     def __init__(self) -> None:
-        self.daten = {"c3po:gi12": {"raum": "Buero"}}
-        self.schreibzugriffe = []
+        self.data = {"c3po:gi12": {"room": "Office"}}
+        self.writes = []
 
-    def alle(self):
-        return self.daten.copy()
+    def all(self):
+        return self.data.copy()
 
-    def lesen(self, schluessel):
-        return self.daten.get(schluessel, {})
+    def read(self, key):
+        return self.data.get(key, {})
 
-    def schreiben(self, schluessel, von="", **felder):
-        self.schreibzugriffe.append((schluessel, von, felder))
-        self.daten[schluessel] = {k: v for k, v in felder.items() if v}
-        return self.daten[schluessel]
+    def write(self, key, changed_by="", **fields):
+        self.writes.append((key, changed_by, fields))
+        self.data[key] = {k: v for k, v in fields.items() if v}
+        return self.data[key]
 
 
-class BestandDouble(ImSpeicher):
+class StoreDouble(MemoryStore):
     def __init__(self) -> None:
         super().__init__()
-        self.pflege = PflegeDouble()
+        self.annotations = AnnotationsDouble()
 
-    def sichtungen(self):
-        return {"aa:bb:cc:dd:ee:ff": (JETZT, JETZT)}
+    def sightings(self):
+        return {"aa:bb:cc:dd:ee:ff": (NOW, NOW)}
 
 
-def _bestand() -> BestandDouble:
-    bestand = BestandDouble()
-    bestand.intervalle.extend([
-        Intervall(Beziehung.ADRESSE, "aa:bb:cc:dd:ee:ff", "adresse",
-                  "172.16.10.44", JETZT),
-        Intervall(Beziehung.ANSCHLUSS, "aa:bb:cc:dd:ee:ff", "anschluss",
-                  "c3po:gi12", JETZT),
-        # Die Zeichenfolge beweist, dass Nutzdaten den JSON-script-Block nicht
-        # beenden koennen und nach JSON.parse trotzdem unveraendert ankommen.
-        Intervall(Beziehung.MERKMAL, "aa:bb:cc:dd:ee:ff", "name",
-                  "Sensor </script> Labor", JETZT),
+def _store() -> StoreDouble:
+    store = StoreDouble()
+    store.intervals.extend([
+        Interval(Relation.ADDRESS, "aa:bb:cc:dd:ee:ff", "address",
+                 "172.16.10.44", NOW),
+        Interval(Relation.ATTACHMENT, "aa:bb:cc:dd:ee:ff", "attachment",
+                 "c3po:gi12", NOW),
+        # The string proves that payload data cannot end the JSON script block and
+        # still arrives unchanged after JSON.parse.
+        Interval(Relation.ATTRIBUTE, "aa:bb:cc:dd:ee:ff", "name",
+                 "Sensor </script> Lab", NOW),
     ])
-    return bestand
+    return store
 
 
 def _client():
-    bestand = _bestand()
-    app = app_bauen(lambda: bestand, speicher_bauen=lambda db: db)
-    return TestClient(app), bestand
+    store = _store()
+    app = build_app(lambda: store, store_factory=lambda db: db, root="bb8")
+    return TestClient(app), store
 
 
-def test_startseite_bettet_parsebaren_und_sicheren_stand_ein():
+def test_start_page_embeds_a_parseable_and_safe_state():
     client, _ = _client()
-    antwort = client.get("/")
+    response = client.get("/")
 
-    assert antwort.status_code == 200
-    treffer = re.search(
-        r'<script id="stand" type="application/json">(.*?)</script>',
-        antwort.text,
+    assert response.status_code == 200
+    m = re.search(
+        r'<script id="state" type="application/json">(.*?)</script>',
+        response.text,
         re.DOTALL,
     )
-    assert treffer
-    assert "<\\/script>" in treffer.group(1)
-    stand = json.loads(treffer.group(1))
-    assert stand["DEV"][0]["label"] == "Sensor </script> Labor"
+    assert m
+    assert "<\\/script>" in m.group(1)
+    state = json.loads(m.group(1))
+    assert state["DEV"][0]["label"] == "Sensor </script> Lab"
 
 
-def test_api_stand_hat_die_erwartete_form():
+def test_api_state_has_the_expected_shape():
     client, _ = _client()
-    stand = client.get("/api/stand").json()
+    state = client.get("/api/state").json()
 
-    assert stand["wurzel"] == "bb8"
-    assert stand["DEV"][0]["id"] == "aa:bb:cc:dd:ee:ff"
-    assert {"NETS", "APS", "SWITCHES", "PORTS", "CHANGES", "PFLEGE"} <= set(stand)
+    assert state["root"] == "bb8"
+    assert state["DEV"][0]["id"] == "aa:bb:cc:dd:ee:ff"
+    assert {"NETS", "APS", "SWITCHES", "PORTS", "CHANGES", "ANNOTATIONS"} <= set(state)
 
 
-def test_pflege_portschluessel_und_benutzer_kommen_korrekt_an():
-    client, bestand = _client()
-    antwort = client.put(
-        "/api/pflege/c3po:gi12",
-        json={"dose": "B2-14"},
-        headers={"X-Forwarded-Preferred-Username": "franz"},
+def test_annotation_port_key_and_user_arrive_correctly():
+    client, store = _client()
+    response = client.put(
+        "/api/annotation/c3po:gi12",
+        json={"outlet": "B2-14"},
+        headers={"X-Forwarded-Preferred-Username": "alex"},
     )
 
-    assert antwort.status_code == 200
-    assert bestand.pflege.schreibzugriffe[-1] == (
-        "c3po:gi12", "franz", {"dose": "B2-14"},
-    )
-
-
-def test_pflege_netzschluessel_mit_schraegstrich_kommt_korrekt_an():
-    client, bestand = _client()
-    antwort = client.put(
-        "/api/pflege/netz:172.16.10.0/24",
-        json={"notiz": "Intern"},
-        headers={"X-Forwarded-User": "proxy-nutzer"},
-    )
-
-    assert antwort.status_code == 200
-    assert bestand.pflege.schreibzugriffe[-1] == (
-        "netz:172.16.10.0/24", "proxy-nutzer", {"notiz": "Intern"},
+    assert response.status_code == 200
+    assert store.annotations.writes[-1] == (
+        "c3po:gi12", "alex", {"outlet": "B2-14"},
     )
 
 
-def test_pflege_unbekanntes_feld_ist_ungueltig():
+def test_annotation_network_key_with_slash_arrives_correctly():
+    client, store = _client()
+    response = client.put(
+        "/api/annotation/net:172.16.10.0/24",
+        json={"note": "internal"},
+        headers={"X-Forwarded-User": "proxy-user"},
+    )
+
+    assert response.status_code == 200
+    assert store.annotations.writes[-1] == (
+        "net:172.16.10.0/24", "proxy-user", {"note": "internal"},
+    )
+
+
+def test_annotation_unknown_field_is_invalid():
     client, _ = _client()
-    antwort = client.put("/api/pflege/c3po:gi12", json={"farbe": "blau"})
-    assert antwort.status_code == 422
+    response = client.put("/api/annotation/c3po:gi12", json={"colour": "blue"})
+    assert response.status_code == 422
 
 
-def test_gesund_braucht_keine_datenbank():
-    app = app_bauen(lambda: (_ for _ in ()).throw(RuntimeError("keine DB")))
-    antwort = TestClient(app).get("/gesund")
-    assert antwort.status_code == 200
-    assert antwort.json() == {"ok": True}
+def test_health_needs_no_database():
+    app = build_app(lambda: (_ for _ in ()).throw(RuntimeError("no db")), root="bb8")
+    response = TestClient(app).get("/health")
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}

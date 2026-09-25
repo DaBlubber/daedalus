@@ -1,0 +1,107 @@
+# Daedalus site configuration.
+#
+# Copy to daedalus.toml and describe YOUR network. Everything here is public
+# knowledge about the site; secrets (database password, SNMP communities) never go
+# into this file - they come from the environment, see .env.example.
+#
+# Path: DAEDALUS_CONFIG (default ./daedalus.toml, in the container /config/daedalus.toml)
+
+# Times are stored in UTC and displayed in this zone (IANA name).
+timezone = "UTC"
+
+# The switch the map starts at - the one directly behind your gateway.
+# Default: the first switch below.
+root_switch = "bb8"
+
+# Front ports above this number are drawn as fibre/SFP ports.
+copper_ports = 24
+
+# --- Gateway / firewall -------------------------------------------------------------
+# `address` is asked for its ARP table via SNMP v2c (ipNetToMediaPhysAddress).
+# Without it (or without DAEDALUS_SNMP_FIREWALL) there are no IP addresses.
+[firewall]
+address   = "172.16.1.1"
+name      = "GATEWAY"                       # label on the map
+model     = ""                              # optional, shown on hover
+addresses = ["172.16.1.1", "172.16.0.1"]    # optional, all legs of the gateway
+
+# --- Switches -----------------------------------------------------------------------
+# One table per switch. The name is how the switch appears on the map and must match
+# what its neighbours report via LLDP (case does not matter).
+# Needed on the switch: SNMP v2c read access, LLDP enabled, BRIDGE-MIB/Q-BRIDGE-MIB.
+[switches.bb8]
+address = "172.16.0.4"
+model   = "SG200-26"
+ports   = 26
+
+[switches.r2d2]
+address = "172.16.0.2"
+model   = "SG300-28PP"
+ports   = 28
+
+[switches.c3po]
+address = "172.16.0.3"
+model   = "SG300-28"
+ports   = 28
+
+[switches.l337]
+address = "172.16.0.5"
+model   = "SG200-26"
+ports   = 26
+
+# --- Networks -----------------------------------------------------------------------
+# No source knows which subnet is which VLAN and what you call it. `vlan` may be
+# omitted for an untagged management network.
+[[networks]]
+cidr = "172.16.0.0/24"
+name = "MANAGEMENT"
+
+[[networks]]
+cidr = "172.16.1.0/24"
+vlan = 5
+name = "SERVER"
+
+[[networks]]
+cidr = "172.16.10.0/24"
+vlan = 10
+name = "INTERNAL"
+
+[[networks]]
+cidr = "172.16.11.0/24"
+vlan = 20
+name = "SMART"
+
+[[networks]]
+cidr = "172.16.12.0/24"
+vlan = 30
+name = "GUEST"
+
+# --- DHCP (optional) ----------------------------------------------------------------
+# Kea: device names from leases and reservations. `kea_nodes` are control agent or
+# HA listener URLs that answer `lease4-get-all`; they are tried in order.
+# `config_url` serves the deployed kea-dhcp4.conf over HTTP (reservations, pools).
+[dhcp]
+kea_nodes    = ["http://172.16.1.3:8000/", "http://172.16.1.4:8000/"]
+config_url   = ""
+local_domain = "example.com"     # names in this domain are shortened
+
+# --- Prometheus (optional) ----------------------------------------------------------
+# inventory: host names from the `host` label of your scrape targets.
+# wifi:      Wi-Fi clients from unpoller (https://github.com/unpoller/unpoller).
+[prometheus]
+url       = ""                   # e.g. "http://prometheus:9090"
+inventory = true
+wifi      = true
+
+# --- Actions in the UI --------------------------------------------------------------
+# Ping, traceroute, port check and Wake-on-LAN only work on these networks.
+# Default: all networks above. `ping_only_networks` allow ping and nothing else.
+[actions]
+own_networks       = ["172.16.0.0/16"]
+ping_only_networks = []
+
+# --- Intervals (optional, seconds) --------------------------------------------------
+# Keys are source names or prefixes. Defaults: firewall-arp 300, inventory 900,
+# kea 900, dhcp-config 900, wifi 300, fdb- 300, lldp- 1800, port- 300.
+[intervals]
+# "lldp-" = 3600

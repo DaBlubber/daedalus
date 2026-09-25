@@ -1,16 +1,15 @@
-# Daedalus — Sammeldienst und Weboberflaeche (ein Abbild, zwei Aufgaben)
+# Daedalus - collector service and web UI (one image, two jobs)
 #
-# Bringt seine Werkzeuge selbst mit: net-snmp gehoert ins Abbild, nicht auf den
-# Wirt. Auf den Lab-Knoten ist bewusst nichts davon installiert.
+# The image brings its own tools: net-snmp belongs in the image, not on the host.
 FROM python:3.12-alpine
 
-# tzdata: ohne die Zonendateien kennt `zoneinfo` kein Europe/Berlin, und jede
-# Zeitangabe im Protokoll stuende falsch — in genau dem Werkzeug, das Historie
-# fuehrt. net-snmp-tools: snmpbulkwalk fuer Switches und Firewall.
-# iputils-ping, traceroute, nmap, libcap: die Aktionen der Oberflaeche (nmap nur
-# als Verbindungsscan -sT, der keine Sonderrechte braucht). Der Dienst
-# laeuft ohne Root; `setcap cap_net_raw` gibt genau diesen beiden Programmen das
-# Recht auf ICMP, nicht dem ganzen Prozess.
+# tzdata: without the zone files `zoneinfo` knows no time zone besides UTC, and
+# every displayed time would be wrong - in exactly the tool that keeps history.
+# net-snmp-tools: snmpbulkwalk for switches and firewall.
+# iputils-ping, traceroute, nmap, libcap: the actions of the UI (nmap only as a
+# connect scan -sT, which needs no privileges). The service runs without root;
+# `setcap cap_net_raw` gives exactly these two programs the right to send ICMP,
+# not the whole process.
 RUN apk add --no-cache net-snmp-tools tzdata iputils-ping traceroute libcap nmap \
  && setcap cap_net_raw+ep "$(readlink -f "$(command -v ping)")" \
  && setcap cap_net_raw+ep "$(readlink -f "$(command -v traceroute)")" \
@@ -19,14 +18,17 @@ RUN apk add --no-cache net-snmp-tools tzdata iputils-ping traceroute libcap nmap
 
 WORKDIR /app
 COPY daedalus/ ./daedalus/
-COPY lauf.py schema.sql ./
-COPY migrationen/ ./migrationen/
+COPY run.py schema.sql ./
+COPY migrations/ ./migrations/
 
-# Kein Wurzelbenutzer: der Dienst liest nur, er braucht keine Rechte am Abbild.
+# No root user: the service only reads, it needs no rights on the image.
 RUN adduser -D -H daedalus
 USER daedalus
 
-ENV PYTHONUNBUFFERED=1 TZ=Europe/Berlin
-# Vorgabe ist der Sammeldienst; die Weboberflaeche setzt im Nomad-Job ihren
-# eigenen Befehl. Kein ENTRYPOINT, damit beide gleich lesbar bleiben.
-CMD ["python", "lauf.py", "--dienst"]
+# The configuration is mounted to /config/daedalus.toml (see README).
+ENV PYTHONUNBUFFERED=1 DAEDALUS_CONFIG=/config/daedalus.toml
+EXPOSE 8000
+# The default is the collector service; the web UI sets its own command:
+#   uvicorn daedalus.web:app --host 0.0.0.0 --port 8000
+# No ENTRYPOINT, so both read the same way.
+CMD ["python", "run.py", "--service"]

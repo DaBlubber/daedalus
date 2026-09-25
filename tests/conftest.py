@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Dieselben Regeln, zwei Speicher.
+"""The same rules, two stores.
 
-Jeder Test laeuft zweimal: einmal im Arbeitsspeicher und einmal gegen das echte
-PostgreSQL. Damit ist nicht nur bewiesen, dass die Regeln stimmen, sondern auch,
-dass **Schema und Regeln zusammenpassen** — der haeufigste Ort, an dem so etwas
-auseinanderlaeuft.
+Every test runs twice: once in memory and once against real PostgreSQL. That
+proves not only that the rules are right but also that **schema and rules fit
+together** - the most common place where such things drift apart.
 
-Ohne `DAEDALUS_DSN` laeuft nur der Speicher-Durchgang; die Datenbanktests werden
-dann uebersprungen statt rot zu werden.
+Without `DAEDALUS_TEST_DSN` only the memory pass runs; the database tests are
+skipped instead of turning red.
 """
 from __future__ import annotations
 
@@ -19,77 +18,77 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from daedalus.modell import Beziehung
-from daedalus.speicher import ImSpeicher, PgSpeicher
-from daedalus.zeit import mit_zeitzone
+from daedalus.db import ensure_schema, session_dsn
+from daedalus.store import MemoryStore, PgStore
 
-# ACHTUNG, und das ist teuer gelernt: die Vorrichtung unten macht TRUNCATE.
-# Am 16.09.2026 lief sie versehentlich gegen die PRODUKTIVdatenbank und hat
-# einen kompletten Sammellauf geloescht — 1105 Beobachtungen, weg.
+# CAUTION, and this was learned the hard way: the fixture below runs TRUNCATE. It
+# once ran against the PRODUCTION database by accident and deleted a complete
+# collection run - 1105 observations, gone.
 #
-# Deshalb zwei Sperren:
-#   1. Die Tests lesen `DAEDALUS_TEST_DSN`, NICHT `DAEDALUS_DSN`.
-#   2. Auch dann wird nur geraeumt, wenn der Datenbankname auf `_test` endet.
-# Eine Kenntnis allein reicht nicht; es braucht beides.
+# Hence two locks:
+#   1. The tests read `DAEDALUS_TEST_DSN`, NOT `DAEDALUS_DSN`.
+#   2. Even then the database is only emptied if its name ends in `_test`.
+# One of them alone is not enough; both are required.
 DSN = os.environ.get("DAEDALUS_TEST_DSN")
 
 
-def _ist_testdatenbank(dsn: str) -> bool:
+def _is_test_database(dsn: str) -> bool:
     from urllib.parse import urlsplit
     name = urlsplit(dsn).path.lstrip("/")
     return name.endswith("_test")
 
-# Die Quellen der Tests. In der Datenbank haengen `lauf` und `zuordnung` per
-# Fremdschluessel daran — das ist Absicht: eine Beobachtung ohne bekannte
-# Herkunft darf es nicht geben.
-QUELLEN = [
-    ("fdb", ["anschluss"], 2, 300),
-    ("arp", ["adresse"], 2, 300),
-    ("sophos-arp", ["adresse"], 2, 300),
-    ("fdb-c3po", ["anschluss"], 2, 300),
-    ("lldp-c3po", ["verbindung"], 3, 1800),
-    ("lldp", ["verbindung"], 3, 1800),
-    ("a", ["anschluss"], 2, 300),
-    ("b", ["anschluss"], 2, 300),
-    ("q0", ["anschluss"], 2, 300),
-    ("q1", ["anschluss"], 2, 300),
-    ("q2", ["anschluss"], 2, 300),
-    ("q3", ["anschluss"], 2, 300),
-    ("q4", ["anschluss"], 2, 300),
+# The sources of the tests. In the database `run` and `assignment` reference them
+# by foreign key - that is intentional: an observation without a known origin
+# must not exist.
+SOURCES = [
+    ("fdb", ["attachment"], 2, 300),
+    ("arp", ["address"], 2, 300),
+    ("firewall-arp", ["address"], 2, 300),
+    ("fdb-c3po", ["attachment"], 2, 300),
+    ("lldp-c3po", ["connection"], 3, 1800),
+    ("lldp", ["connection"], 3, 1800),
+    ("a", ["attachment"], 2, 300),
+    ("b", ["attachment"], 2, 300),
+    ("q0", ["attachment"], 2, 300),
+    ("q1", ["attachment"], 2, 300),
+    ("q2", ["attachment"], 2, 300),
+    ("q3", ["attachment"], 2, 300),
+    ("q4", ["attachment"], 2, 300),
 
-    ("inventar", ["merkmal"], 2, 300),
-    ("wlan", ["adresse", "anschluss", "merkmal"], 2, 300),
-    ("kea", ["merkmal"], 2, 900),
-    ("dhcp-konfig", ["merkmal"], 1, 900),
+    ("inventory", ["attribute"], 2, 300),
+    ("wifi", ["address", "attachment", "attribute"], 2, 300),
+    ("kea", ["attribute"], 2, 900),
+    ("dhcp-config", ["attribute"], 1, 900),
 ]
 
 
-@pytest.fixture(params=["speicher", "postgres"])
-def bestand(request):
-    if request.param == "speicher":
-        yield ImSpeicher()
+@pytest.fixture(params=["memory", "postgres"])
+def store(request):
+    if request.param == "memory":
+        yield MemoryStore()
         return
 
     if not DSN:
-        pytest.skip("DAEDALUS_TEST_DSN nicht gesetzt — Datenbankdurchgang uebersprungen")
-    if not _ist_testdatenbank(DSN):
-        pytest.fail("DAEDALUS_TEST_DSN zeigt nicht auf eine Datenbank, deren Name "
-                    "auf `_test` endet. Die Tests raeumen die Datenbank leer — "
-                    "das darf niemals die produktive treffen.")
+        pytest.skip("DAEDALUS_TEST_DSN not set - database pass skipped")
+    if not _is_test_database(DSN):
+        pytest.fail("DAEDALUS_TEST_DSN does not point to a database whose name ends "
+                    "in `_test`. The tests empty the database - that must never hit "
+                    "the production one.")
     try:
         import psycopg
     except ImportError:
-        pytest.skip("psycopg nicht installiert")
+        pytest.skip("psycopg not installed")
 
     try:
-        verbindung = psycopg.connect(mit_zeitzone(DSN), connect_timeout=6, autocommit=True)
+        connection = psycopg.connect(session_dsn(DSN), connect_timeout=6, autocommit=True)
     except Exception as e:                      # noqa: BLE001
-        pytest.skip(f"Datenbank nicht erreichbar: {e}")
+        pytest.skip(f"database not reachable: {e}")
 
-    with verbindung:
-        with verbindung.cursor() as c:
-            c.execute("TRUNCATE aenderung, zuordnung, lauf, pflege, objekt, quelle CASCADE")
+    with connection:
+        ensure_schema(connection)
+        with connection.cursor() as c:
+            c.execute("TRUNCATE change, assignment, run, annotation, object, source CASCADE")
             c.executemany(
-                "INSERT INTO quelle (name, zustaendig_fuer, fehlt_schwelle, takt_sekunden)"
-                " VALUES (%s,%s,%s,%s)", QUELLEN)
-        yield PgSpeicher(verbindung)
+                "INSERT INTO source (name, responsible_for, missing_threshold, interval_seconds)"
+                " VALUES (%s,%s,%s,%s)", SOURCES)
+        yield PgStore(connection)
